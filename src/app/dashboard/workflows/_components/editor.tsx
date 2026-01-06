@@ -13,12 +13,14 @@ import {
     useReactFlow
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css"; 
-import { useCallback, useRef, useState, useEffect } from "react"; // useEffect added
+import { useCallback, useRef, useState, useEffect, useMemo } from "react"; 
 import Tray from "./Tray"; 
 import { updateWorkflow } from "@/app/actions/workflows";
 import { Button } from "@/components/ui/button";
 import { Save, Loader2 } from "lucide-react";
 import { toast } from "sonner"; 
+
+import CustomNode from "./CustomNode"; 
 
 type Workflow = typeof workflows.$inferSelect;
 
@@ -48,6 +50,12 @@ function FlowEditor({ workflow }: EditorProps) {
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null); 
   const { screenToFlowPosition } = useReactFlow(); 
+
+  // DEFINE CUSTOM NODE TYPES
+  // React Flow ko batao ki humara custom node use kare
+  const nodeTypes = useMemo(() => ({
+    OrbitNode: CustomNode, 
+  }), []);
 
   // Debugging: Check if component mounted
   useEffect(() => {
@@ -83,18 +91,13 @@ function FlowEditor({ workflow }: EditorProps) {
 
       const newNode = {
         id: crypto.randomUUID(),
-        type: 'default', 
+        type: 'OrbitNode', // <--- CHANGED from 'default' to 'OrbitNode'
         position,
-        data: { label: `${type} node` },
-        // Custom styling for better visibility
-        style: { 
-            background: '#18181b', 
-            color: '#fff', 
-            border: '1px solid #a1a1aa', 
-            borderRadius: '8px',
-            padding: '10px',
-            minWidth: '150px'
-        } 
+        data: { 
+            label: type === 'trigger' ? 'Webhook Trigger' : `${type} Action`, // Better names
+            type: type, // Pass the type (google-drive, slack) so CustomNode can pick icon
+            description: "Not configured yet"
+        },
       };
 
       setNodes((nds) => nds.concat(newNode));
@@ -147,6 +150,7 @@ function FlowEditor({ workflow }: EditorProps) {
                     onConnect={onConnect}
                     onDragOver={onDragOver}
                     onDrop={onDrop}
+                    nodeTypes={nodeTypes} // <--- ADDED THIS LINE
                     fitView
                 >
                     <Background color="#555" gap={20} size={1} />
