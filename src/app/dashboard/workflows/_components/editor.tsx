@@ -15,12 +15,16 @@ import {
 import "@xyflow/react/dist/style.css"; 
 import { useCallback, useRef, useState, useEffect, useMemo } from "react"; 
 import Tray from "./Tray"; 
-import { updateWorkflow } from "@/app/actions/workflows";
+// UPDATED IMPORT: Added runWorkflow
+import { updateWorkflow, runWorkflow } from "@/app/actions/workflows";
 import { Button } from "@/components/ui/button";
-import { Save, Loader2 } from "lucide-react";
+// UPDATED IMPORT: Added Play icon
+import { Save, Loader2, Play } from "lucide-react";
 import { toast } from "sonner"; 
 
 import CustomNode from "./CustomNode"; 
+import SettingsPanel from "./SettingsPanel";
+
 
 type Workflow = typeof workflows.$inferSelect;
 
@@ -48,6 +52,12 @@ function FlowEditor({ workflow }: EditorProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [saving, setSaving] = useState(false);
   
+  // NEW: State for running simulation
+  const [isRunning, setIsRunning] = useState(false);
+
+  // NEW: State for selected node
+  const [selectedNode, setSelectedNode] = useState<any>(null);
+  
   const reactFlowWrapper = useRef<HTMLDivElement>(null); 
   const { screenToFlowPosition } = useReactFlow(); 
 
@@ -60,6 +70,11 @@ function FlowEditor({ workflow }: EditorProps) {
   // Debugging: Check if component mounted
   useEffect(() => {
     console.log("Editor Mounted. Initial Nodes:", nodes);
+  }, []);
+
+  // NEW: Handle Click on Node
+  const onNodeClick = useCallback((event: React.MouseEvent, node: any) => {
+    setSelectedNode(node);
   }, []);
 
   const onConnect = useCallback(
@@ -123,13 +138,61 @@ function FlowEditor({ workflow }: EditorProps) {
      }
   };
 
+  // NEW: Run Workflow Function
+  const onRun = async () => {
+     setIsRunning(true);
+     // 1. Pehle Save karo (taaki latest changes run hon)
+     await onSave(); 
+     
+     try {
+        // 2. Run Server Action
+        const result = await runWorkflow(workflow.id);
+        
+        if (!result.success) {
+            toast.error(result.message);
+            return;
+        }
+
+        // 3. Show Logs (Hacker Style)
+        toast.message("Execution Finished", {
+            description: (
+                <div className="flex flex-col gap-1 mt-2 p-2 bg-zinc-900 rounded-md border border-zinc-800">
+                    {result.logs?.map((log: string, i: number) => (
+                        <span key={i} className="text-xs font-mono text-zinc-400">
+                            {log}
+                        </span>
+                    ))}
+                </div>
+            ),
+            duration: 5000, // 5 seconds tak dikhao
+        });
+
+     } catch (err) {
+        toast.error("Execution failed");
+        console.error(err);
+     } finally {
+        setIsRunning(false);
+     }
+  };
+
   return (
     <>
        {/* Top Bar */}
        <div className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-900 h-16 shrink-0">
             <h2 className="font-bold text-white">{workflow.name}</h2>
             <div className="flex gap-2">
-                <Button onClick={onSave} disabled={saving} className="bg-white text-black hover:bg-gray-200">
+                {/* RUN BUTTON */}
+                <Button 
+                    onClick={onRun} 
+                    disabled={isRunning || saving} 
+                    className="bg-green-600 text-white hover:bg-green-700 border-green-500"
+                >
+                    {isRunning ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
+                    Run
+                </Button>
+
+                {/* SAVE BUTTON */}
+                <Button onClick={onSave} disabled={saving || isRunning} variant="outline" className="text-black bg-white hover:bg-zinc-200">
                     {saving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Save
                 </Button>
@@ -150,7 +213,8 @@ function FlowEditor({ workflow }: EditorProps) {
                     onConnect={onConnect}
                     onDragOver={onDragOver}
                     onDrop={onDrop}
-                    nodeTypes={nodeTypes} // <--- ADDED THIS LINE
+                    onNodeClick={onNodeClick} // <--- ADDED THIS PROP
+                    nodeTypes={nodeTypes}
                     fitView
                 >
                     <Background color="#555" gap={20} size={1} />
@@ -158,6 +222,13 @@ function FlowEditor({ workflow }: EditorProps) {
                 </ReactFlow>
             </div>
        </div>
+
+       {/* THE SETTINGS PANEL (Renders on top or side depending on CSS) */}
+       <SettingsPanel 
+            selectedNode={selectedNode} 
+            setNodes={setNodes}
+            onClose={() => setSelectedNode(null)}
+       />
     </>
   );
 }
