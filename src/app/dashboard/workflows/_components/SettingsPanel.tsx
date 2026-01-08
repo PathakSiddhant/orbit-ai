@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useNodes } from "@xyflow/react"; // <--- IMPORT THIS
+import { useNodes } from "@xyflow/react"; 
 
 interface SettingsPanelProps {
   selectedNode: { id: string; type: string; data: any } | null;
@@ -94,30 +94,31 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
              </div>
           )}
 
-          {/* --- SLACK --- */}
+          {/* --- SLACK / DISCORD (Updated Section) --- */}
           {currentNode.data.type === "slack" && (
              <div className="space-y-4 p-5 bg-pink-950/20 border border-pink-900/50 rounded-xl">
                  <div className="flex items-center gap-2 mb-2">
                     <div className="h-2 w-2 rounded-full bg-pink-500"></div>
-                    <Label className="text-pink-400 font-semibold text-base">Slack Integration</Label>
+                    <Label className="text-pink-400 font-semibold text-base">Slack/Discord Webhook</Label>
                 </div>
 
                 <div className="grid gap-3">
                     <div>
-                        <Label htmlFor="channel" className="text-xs text-zinc-400 uppercase tracking-wider">Channel</Label>
+                        <Label htmlFor="webhook" className="text-xs text-zinc-400 uppercase tracking-wider">Webhook URL</Label>
                         <Input 
-                            id="channel" 
-                            placeholder="#general"
-                            value={currentNode.data.channel || ""}
-                            onChange={(e) => handleChange(e, 'channel')}
-                            className="bg-black/40 border-pink-900/30 mt-1.5 focus:border-pink-500/50"
+                            id="webhook" 
+                            placeholder="https://discord.com/api/webhooks/..."
+                            value={currentNode.data.slackWebhook || ""} // New Field
+                            onChange={(e) => handleChange(e, 'slackWebhook')}
+                            className="bg-black/40 border-pink-900/30 mt-1.5 focus:border-pink-500/50 text-xs font-mono"
                         />
+                        <p className="text-[10px] text-zinc-500 mt-1">Paste your Slack or Discord Webhook URL here.</p>
                     </div>
                     <div>
-                        <Label htmlFor="message" className="text-xs text-zinc-400 uppercase tracking-wider">Message Template</Label>
+                        <Label htmlFor="message" className="text-xs text-zinc-400 uppercase tracking-wider">Message</Label>
                         <Textarea 
                             id="message" 
-                            placeholder="Enter the message to send..."
+                            placeholder="Hello World from Orbit!"
                             value={currentNode.data.message || ""}
                             onChange={(e) => handleChange(e, 'message')}
                             className="bg-black/40 border-pink-900/30 min-h-[100px] mt-1.5 focus:border-pink-500/50 resize-none"
