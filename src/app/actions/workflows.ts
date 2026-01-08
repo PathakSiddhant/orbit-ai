@@ -5,6 +5,7 @@ import { workflows } from "@/lib/db/schema";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
+import { generateAIContent } from "@/lib/gemini"; // AI Helper Import
 
 // 1. Create Workflow Function
 export async function createWorkflow(name: string, description: string) {
@@ -20,7 +21,7 @@ export async function createWorkflow(name: string, description: string) {
     edges: "[]",
   });
 
-  revalidatePath("/dashboard/workflows"); // Next.js cache clear karo
+  revalidatePath("/dashboard/workflows"); 
 }
 
 // 2. Update Workflow Function
@@ -32,7 +33,6 @@ export async function updateWorkflow(
     const { userId } = await auth();
     if (!userId) throw new Error("Unauthorized");
 
-    // Only update if user owns it
     await db.update(workflows)
         .set({ nodes, edges, updatedAt: new Date() })
         .where(
@@ -46,12 +46,12 @@ export async function updateWorkflow(
     return { success: true };
 }
 
-// 3. Run Workflow Function (REAL EXECUTION LOGIC)
+// 3. Run Workflow Function (UPDATED LINEAR CHAIN LOGIC 🔗)
 export async function runWorkflow(flowId: number) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  // A. Fetch latest workflow data from DB
+  // A. Fetch latest workflow data
   const workflow = await db.query.workflows.findFirst({
     where: and(eq(workflows.id, flowId), eq(workflows.userId, userId))
   });
@@ -71,57 +71,81 @@ export async function runWorkflow(flowId: number) {
   // --- EXECUTION START ---
   const executionLog: string[] = [];
   executionLog.push(`🚀 Execution Started`);
-   
-  // C. Find connected neighbors (BFS Traversal Lite)
-  // Hum dhundenge ki Trigger se kaunsi line (edge) nikal rahi hai
-  const connectedEdges = edges.filter((edge: any) => edge.source === starterNode.id);
+  
+  // --- LINEAR CHAIN EXECUTION ---
+  // Ye logic seedha ek line mein chalega: Trigger -> Node 1 -> Node 2
+  
+  let currentNode = starterNode;
+  let aiOutput = ""; // Store data between steps
 
-  if (connectedEdges.length === 0) {
-    executionLog.push("⚠️ No actions connected.");
-  } else {
-    for (const edge of connectedEdges) {
-       const nextNodeId = edge.target;
-       const nextNode = nodes.find((n: any) => n.id === nextNodeId);
-       
-       if (nextNode) {
-          executionLog.push(`⚙️ Processing: ${nextNode.data.label}`);
-          
-          // --- REAL API CALLS START HERE ---
-          
-          if (nextNode.data.type === "slack") {
-             const webhookUrl = nextNode.data.slackWebhook;
-             const message = nextNode.data.message || "Hello from Orbit!";
+  // Run maximum 5 steps to prevent infinite loops
+  for (let i = 0; i < 5; i++) {
+      // Find the edge connecting FROM current node
+      const edge = edges.find((e: any) => e.source === currentNode.id);
+      
+      if (!edge) {
+          executionLog.push("🏁 End of chain (No more connections).");
+          break; 
+      }
 
-             if (!webhookUrl) {
-                executionLog.push(`❌ Error: Missing Webhook URL for ${nextNode.data.label}`);
-                continue;
-             }
+      const nextNode = nodes.find((n: any) => n.id === edge.target);
+      if (!nextNode) break;
 
-             try {
-                // Discord requires 'content', Slack requires 'text'
-                // We send both to be safe
-                await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        content: message, // For Discord
-                        text: message     // For Slack
-                    })
-                });
-                executionLog.push(`✅ Message sent successfully to Webhook!`);
-             } catch (error) {
-                executionLog.push(`❌ Failed to send message: ${error}`);
-             }
-          } 
-          
-          // --- FUTURE: Add Google Drive Logic here ---
-          // else if (nextNode.data.type === "google-drive") { ... }
+      executionLog.push(`⚙️ Step ${i+1}: ${nextNode.data.label}`);
 
-          else if (nextNode.data.type === "email") {
-              executionLog.push(`📧 Simulated Email sent to ${nextNode.data.subject}`);
-          }
-       }
-    }
+      // --- EXECUTE NODE LOGIC ---
+
+      // 1. AI AGENT
+      if (nextNode.data.type === "ai-agent") {
+           const prompt = nextNode.data.prompt;
+           if(!prompt) {
+               executionLog.push(`❌ Error: No prompt provided.`);
+           } else {
+               executionLog.push(`🧠 Generating AI response...`);
+               try {
+                   aiOutput = await generateAIContent(prompt);
+                   executionLog.push(`✅ AI Output generated.`);
+               } catch (err) {
+                   executionLog.push(`❌ AI Failed: ${err}`);
+               }
+           }
+      } 
+      
+      // 2. SLACK / DISCORD
+      else if (nextNode.data.type === "slack") {
+           const webhookUrl = nextNode.data.slackWebhook;
+           
+           // Use AI Output if available, else use static message
+           const message = aiOutput 
+                ? `🤖 **Orbit AI:** ${aiOutput}` 
+                : (nextNode.data.message || "Hello from Orbit!");
+           
+           if(!webhookUrl) {
+               executionLog.push(`❌ Error: Missing Webhook URL.`);
+           } else {
+               try {
+                   await fetch(webhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            content: message, // Discord
+                            text: message     // Slack
+                        })
+                    });
+                   executionLog.push(`✅ Message sent to Discord/Slack.`);
+               } catch (err) {
+                   executionLog.push(`❌ Failed to send message: ${err}`);
+               }
+           }
+      }
+
+      // 3. EMAIL (Simulation)
+      else if (nextNode.data.type === "email") {
+           executionLog.push(`📧 Simulated Email sent to ${nextNode.data.subject}`);
+      }
+
+      // Move to next node for the next loop iteration
+      currentNode = nextNode;
   }
 
   return { success: true, logs: executionLog };
