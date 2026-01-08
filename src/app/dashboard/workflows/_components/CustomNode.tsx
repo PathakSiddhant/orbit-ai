@@ -2,7 +2,7 @@
 
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Handle, Position } from "@xyflow/react";
-import { FileText, HardDrive, Mail, Slack } from "lucide-react";
+import { FileText, HardDrive, Mail, Slack, BrainCircuit } from "lucide-react"; // Added BrainCircuit
 
 // Icon Map: Node ke type ke hisab se icon choose karega
 const iconMap: Record<string, any> = {
@@ -10,6 +10,7 @@ const iconMap: Record<string, any> = {
   "google-drive": HardDrive,
   "slack": Slack,
   "email": Mail,
+  "ai-agent": BrainCircuit, // New AI Icon
 };
 
 const colorMap: Record<string, string> = {
@@ -17,6 +18,7 @@ const colorMap: Record<string, string> = {
   "google-drive": "text-green-400",
   "slack": "text-pink-400",
   "email": "text-blue-400",
+  "ai-agent": "text-violet-500", // New AI Color
 };
 
 export default function CustomNode({ data }: { data: any }) {

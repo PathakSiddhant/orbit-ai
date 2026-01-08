@@ -17,7 +17,6 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
   const nodes = useNodes();
 
   // 2. Find the LIVE version of the selected node
-  // (Ye line magic karegi: Ye ensure karegi ki hum hamesha latest data dekh rahe hain)
   const currentNode = nodes.find((n) => n.id === selectedNode?.id);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string) => {
@@ -94,7 +93,7 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
              </div>
           )}
 
-          {/* --- SLACK / DISCORD (Updated Section) --- */}
+          {/* --- SLACK / DISCORD --- */}
           {currentNode.data.type === "slack" && (
              <div className="space-y-4 p-5 bg-pink-950/20 border border-pink-900/50 rounded-xl">
                  <div className="flex items-center gap-2 mb-2">
@@ -108,7 +107,7 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                         <Input 
                             id="webhook" 
                             placeholder="https://discord.com/api/webhooks/..."
-                            value={currentNode.data.slackWebhook || ""} // New Field
+                            value={currentNode.data.slackWebhook || ""} 
                             onChange={(e) => handleChange(e, 'slackWebhook')}
                             className="bg-black/40 border-pink-900/30 mt-1.5 focus:border-pink-500/50 text-xs font-mono"
                         />
@@ -144,6 +143,29 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                         onChange={(e) => handleChange(e, 'subject')}
                         className="bg-black/40 border-blue-900/30 focus:border-blue-500/50"
                     />
+                </div>
+             </div>
+          )}
+
+          {/* --- AI AGENT (New Section) --- */}
+          {currentNode.data.type === "ai-agent" && (
+             <div className="space-y-4 p-5 bg-violet-950/20 border border-violet-900/50 rounded-xl">
+                 <div className="flex items-center gap-2 mb-2">
+                    <div className="h-2 w-2 rounded-full bg-violet-500"></div>
+                    <Label className="text-violet-400 font-semibold text-base">AI Configuration</Label>
+                </div>
+
+                <div className="grid gap-3">
+                    <div>
+                        <Label htmlFor="prompt" className="text-xs text-zinc-400 uppercase tracking-wider">Prompt</Label>
+                        <Textarea 
+                            id="prompt" 
+                            placeholder="e.g. Write a short joke about Python developers."
+                            value={currentNode.data.prompt || ""}
+                            onChange={(e) => handleChange(e, 'prompt')}
+                            className="bg-black/40 border-violet-900/30 min-h-[100px] mt-1.5 focus:border-violet-500/50 resize-none"
+                        />
+                    </div>
                 </div>
              </div>
           )}

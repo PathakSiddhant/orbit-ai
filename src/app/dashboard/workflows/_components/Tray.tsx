@@ -60,6 +60,18 @@ export default function Tray() {
         </Card>
       </div>
 
+      {/* Draggable Node: AI Agent (New Addition) */}
+      <div
+        className="cursor-grab active:cursor-grabbing"
+        draggable
+        onDragStart={(e) => onDragStart(e, "ai-agent")}
+      >
+        <Card className="p-3 bg-zinc-800 border-zinc-700 hover:border-violet-500 transition flex items-center gap-2 text-white">
+          <div className="h-4 w-4 bg-violet-600 rounded-full flex items-center justify-center text-[10px]">AI</div>
+          <span className="text-sm">AI Agent</span>
+        </Card>
+      </div>
+
     </aside>
   );
 }
