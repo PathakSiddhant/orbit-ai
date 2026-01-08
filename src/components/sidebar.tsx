@@ -21,7 +21,7 @@ const routes = [
   {
     label: "My Agents",
     icon: Bot,
-    href: "/dashboard/agents",
+    href: "/dashboard/workflows", // Both point to workflows now
     color: "text-violet-500",
   },
   {
@@ -44,7 +44,12 @@ const routes = [
   },
 ];
 
-export const Sidebar = () => {
+// Add Props Interface
+interface SidebarProps {
+    currentCredits: number;
+}
+
+export const Sidebar = ({ currentCredits }: SidebarProps) => {
   const pathname = usePathname(); // Pata lagayega hum abhi kis page par hain
 
   return (
@@ -58,7 +63,7 @@ export const Sidebar = () => {
         <div className="space-y-1">
           {routes.map((route) => (
             <Link
-              key={route.href}
+              key={route.label} // <--- FIXED: Changed from href to label (Unique ID)
               href={route.href}
               className={cn(
                 "text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition",
@@ -73,13 +78,26 @@ export const Sidebar = () => {
           ))}
         </div>
       </div>
-      <div className="px-3 py-2">
+
+      {/* UPDATE BOTTOM CARD (Dynamic Credits) */}
+      <div className="px-3 py-2 mt-auto"> {/* mt-auto pushes it to bottom */}
          <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-             <p className="text-xs text-zinc-400 mb-2">Free Plan</p>
-             <div className="w-full bg-zinc-800 rounded-full h-1.5 mb-2">
-                 <div className="bg-blue-500 h-1.5 rounded-full w-[30%]"></div>
+             <div className="flex justify-between items-center mb-2">
+                <p className="text-xs text-zinc-400">Credits</p>
+                <p className="text-xs font-bold text-white">{currentCredits} / 10</p>
              </div>
-             <p className="text-[10px] text-zinc-500">3/10 Credits Used</p>
+             
+             {/* Dynamic Progress Bar */}
+             <div className="w-full bg-zinc-800 rounded-full h-1.5 mb-2">
+                 <div 
+                    className="bg-violet-500 h-1.5 rounded-full transition-all" 
+                    style={{ width: `${(currentCredits / 10) * 100}%` }}
+                 ></div>
+             </div>
+             
+             <p className="text-[10px] text-zinc-500">
+                {currentCredits === 0 ? "Upgrade to Pro" : "Free Plan Active"}
+             </p>
          </div>
       </div>
     </div>
