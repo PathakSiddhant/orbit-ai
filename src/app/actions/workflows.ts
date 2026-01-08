@@ -46,7 +46,7 @@ export async function updateWorkflow(
     return { success: true };
 }
 
-// 3. Run Workflow Function (New Logic Added)
+// 3. Run Workflow Function (REAL EXECUTION LOGIC)
 export async function runWorkflow(flowId: number) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -65,43 +65,64 @@ export async function runWorkflow(flowId: number) {
   const starterNode = nodes.find((n: any) => n.data.type === "trigger");
 
   if (!starterNode) {
-    return { success: false, message: "No Trigger node found! Add a 'Trigger' to start." };
+    return { success: false, message: "No Trigger node found!" };
   }
 
-  // --- EXECUTION SIMULATION (The Brain) ---
+  // --- EXECUTION START ---
   const executionLog: string[] = [];
-  executionLog.push(`🚀 Starting execution for Orbit: ${workflow.name}`);
-  executionLog.push(`✅ Trigger fired: ${starterNode.data.label}`);
-
+  executionLog.push(`🚀 Execution Started`);
+   
   // C. Find connected neighbors (BFS Traversal Lite)
   // Hum dhundenge ki Trigger se kaunsi line (edge) nikal rahi hai
   const connectedEdges = edges.filter((edge: any) => edge.source === starterNode.id);
 
   if (connectedEdges.length === 0) {
-    executionLog.push("⚠️ Workflow ended: No actions connected to trigger.");
+    executionLog.push("⚠️ No actions connected.");
   } else {
     for (const edge of connectedEdges) {
        const nextNodeId = edge.target;
        const nextNode = nodes.find((n: any) => n.id === nextNodeId);
        
        if (nextNode) {
-          // Yahan hum future mein Real API Call karenge (Google/Slack)
-          executionLog.push(`⚙️ Executing Step: ${nextNode.data.label}`);
+          executionLog.push(`⚙️ Processing: ${nextNode.data.label}`);
           
-          // Simulation of processing
-          if (nextNode.data.type === "google-drive") {
-             executionLog.push(`📂 Checking Google Drive Folder: ${nextNode.data.folderId || "N/A"}`);
-          } else if (nextNode.data.type === "slack") {
-             executionLog.push(`💬 Sending Slack Message to: ${nextNode.data.channel || "N/A"}`);
-          } else if (nextNode.data.type === "email") {
-             executionLog.push(`📧 Sending Email: ${nextNode.data.subject || "No Subject"}`);
+          // --- REAL API CALLS START HERE ---
+          
+          if (nextNode.data.type === "slack") {
+             const webhookUrl = nextNode.data.slackWebhook;
+             const message = nextNode.data.message || "Hello from Orbit!";
+
+             if (!webhookUrl) {
+                executionLog.push(`❌ Error: Missing Webhook URL for ${nextNode.data.label}`);
+                continue;
+             }
+
+             try {
+                // Discord requires 'content', Slack requires 'text'
+                // We send both to be safe
+                await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        content: message, // For Discord
+                        text: message     // For Slack
+                    })
+                });
+                executionLog.push(`✅ Message sent successfully to Webhook!`);
+             } catch (error) {
+                executionLog.push(`❌ Failed to send message: ${error}`);
+             }
+          } 
+          
+          // --- FUTURE: Add Google Drive Logic here ---
+          // else if (nextNode.data.type === "google-drive") { ... }
+
+          else if (nextNode.data.type === "email") {
+              executionLog.push(`📧 Simulated Email sent to ${nextNode.data.subject}`);
           }
        }
     }
   }
 
-  executionLog.push("🏁 Workflow completed successfully.");
-
-  // Return the logs so we can show them to the user
   return { success: true, logs: executionLog };
 }
