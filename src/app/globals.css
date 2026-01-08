@@ -58,11 +58,7 @@
   }
 }
 
-@layer base {
-  html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden; /* Scrollbars hatao taaki editor clean dikhe */
-  }
+/* Scroll smooth banane ke liye */
+html {
+  scroll-behavior: smooth;
 }
