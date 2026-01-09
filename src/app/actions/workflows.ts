@@ -1,11 +1,12 @@
 "use server"; // Important! Ye code sirf server pe chalega
 
 import { db } from "@/lib/db";
-import { workflows } from "@/lib/db/schema";
+import { workflows, users, workflowExecutions } from "@/lib/db/schema";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { generateAIContent } from "@/lib/gemini"; // AI Helper Import
+import * as cheerio from 'cheerio'; // Scraping ke liye
 
 // 1. Create Workflow Function
 export async function createWorkflow(name: string, description: string) {
@@ -46,12 +47,26 @@ export async function updateWorkflow(
     return { success: true };
 }
 
-// 3. Run Workflow Function (UPDATED LINEAR CHAIN LOGIC 🔗)
+// 3. Run Workflow Function (WITH SMART AI & CONTEXT INJECTION 🧠)
 export async function runWorkflow(flowId: number) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  // A. Fetch latest workflow data
+  // --- 1. CHECK CREDITS (The Gatekeeper) ---
+  const user = await db.query.users.findFirst({
+      where: eq(users.clerkId, userId)
+  });
+
+  if (!user) throw new Error("User not found");
+  
+  // Credits ko number mein convert karke check karo
+  const currentCredits = parseInt(user.credits || "0");
+  
+  if (currentCredits <= 0) {
+      return { success: false, message: "❌ Not enough credits! Please upgrade." };
+  }
+
+  // --- 2. FETCH WORKFLOW DATA ---
   const workflow = await db.query.workflows.findFirst({
     where: and(eq(workflows.id, flowId), eq(workflows.userId, userId))
   });
@@ -61,20 +76,18 @@ export async function runWorkflow(flowId: number) {
   const nodes = JSON.parse(workflow.nodes || "[]");
   const edges = JSON.parse(workflow.edges || "[]");
 
-  // B. Find the STARTER (Trigger) Node
+  // Find the STARTER (Trigger) Node
   const starterNode = nodes.find((n: any) => n.data.type === "trigger");
 
   if (!starterNode) {
     return { success: false, message: "No Trigger node found!" };
   }
 
-  // --- EXECUTION START ---
+  // --- 3. EXECUTION START ---
   const executionLog: string[] = [];
-  executionLog.push(`🚀 Execution Started`);
+  executionLog.push(`🚀 Execution Started (Credits: ${currentCredits})`);
   
   // --- LINEAR CHAIN EXECUTION ---
-  // Ye logic seedha ek line mein chalega: Trigger -> Node 1 -> Node 2
-  
   let currentNode = starterNode;
   let aiOutput = ""; // Store data between steps
 
@@ -95,36 +108,61 @@ export async function runWorkflow(flowId: number) {
 
       // --- EXECUTE NODE LOGIC ---
 
-      // 1. AI AGENT
+      // A. AI AGENT (UPDATED: SMART CONTEXT LOGIC) 🧠
       if (nextNode.data.type === "ai-agent") {
-           const prompt = nextNode.data.prompt;
-           if(!prompt) {
-               executionLog.push(`❌ Error: No prompt provided.`);
-           } else {
-               executionLog.push(`🧠 Generating AI response...`);
-               try {
-                   aiOutput = await generateAIContent(prompt);
-                   executionLog.push(`✅ AI Output generated.`);
-               } catch (err) {
-                   executionLog.push(`❌ AI Failed: ${err}`);
-               }
-           }
+            const userPrompt = nextNode.data.prompt;
+            
+            if(!userPrompt) {
+                executionLog.push(`❌ Error: No prompt provided.`);
+            } else {
+                // MAGIC FIX: Combine Scraped Data with User Prompt
+                // Agar pichle node se koi data aaya hai (jaise Scraper se), toh usse context banao.
+                let finalPrompt = userPrompt;
+                
+                if (aiOutput && aiOutput.length > 5) {
+                    finalPrompt = `
+                    CONTEXT FROM WEBSITE/FILE:
+                    """
+                    ${aiOutput}
+                    """
+
+                    USER INSTRUCTION:
+                    ${userPrompt}
+
+                    Task: Answer the user instruction strictly based on the context above. If the context doesn't have the answer, say "I couldn't find that info on the page."
+                    `;
+                }
+
+                executionLog.push(`🧠 Sending to AI: "${userPrompt}"...`);
+                
+                try {
+                    // Call Gemini with the SMART Prompt
+                    const aiResponse = await generateAIContent(finalPrompt);
+                    
+                    executionLog.push(`✅ AI Answered: "${aiResponse.substring(0, 50)}..."`);
+                    
+                    // Store specific answer for next steps (like Slack)
+                    aiOutput = aiResponse; 
+                } catch (err) {
+                    executionLog.push(`❌ AI Failed: ${err}`);
+                }
+            }
       } 
       
-      // 2. SLACK / DISCORD
+      // B. SLACK / DISCORD
       else if (nextNode.data.type === "slack") {
-           const webhookUrl = nextNode.data.slackWebhook;
-           
-           // Use AI Output if available, else use static message
-           const message = aiOutput 
+            const webhookUrl = nextNode.data.slackWebhook;
+            
+            // Use AI Output if available, else use static message
+            const message = aiOutput 
                 ? `🤖 **Orbit AI:** ${aiOutput}` 
                 : (nextNode.data.message || "Hello from Orbit!");
-           
-           if(!webhookUrl) {
-               executionLog.push(`❌ Error: Missing Webhook URL.`);
-           } else {
-               try {
-                   await fetch(webhookUrl, {
+            
+            if(!webhookUrl) {
+                executionLog.push(`❌ Error: Missing Webhook URL.`);
+            } else {
+                try {
+                    await fetch(webhookUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
@@ -133,20 +171,75 @@ export async function runWorkflow(flowId: number) {
                         })
                     });
                    executionLog.push(`✅ Message sent to Discord/Slack.`);
-               } catch (err) {
+                } catch (err) {
                    executionLog.push(`❌ Failed to send message: ${err}`);
-               }
-           }
+                }
+            }
       }
 
-      // 3. EMAIL (Simulation)
+      // C. EMAIL (Simulation)
       else if (nextNode.data.type === "email") {
-           executionLog.push(`📧 Simulated Email sent to ${nextNode.data.subject}`);
+            executionLog.push(`📧 Simulated Email sent to ${nextNode.data.subject}`);
+      }
+
+      // D. BROWSER / SCRAPER (REAL LOGIC)
+      else if (nextNode.data.type === "browser") {
+            const url = nextNode.data.url;
+            executionLog.push(`🌐 Visiting Website: ${url}`);
+            
+            try {
+                // REAL SCRAPING LOGIC
+                const response = await fetch(url);
+                const html = await response.text();
+                const $ = cheerio.load(html);
+                
+                // Extract visible text (body text only, remove scripts/styles)
+                $('script').remove();
+                $('style').remove();
+                const textContent = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 1000); // Limit to 1000 chars for AI
+                
+                aiOutput = textContent; // Store for next node (AI)
+                
+                executionLog.push(`✅ Scraped ${textContent.length} chars from page.`);
+                executionLog.push(`📄 Content Preview: "${textContent.substring(0, 50)}..."`);
+            } catch (err: any) {
+                executionLog.push(`❌ Failed to scrape: ${err.message}`);
+                aiOutput = "Failed to scrape content.";
+            }
       }
 
       // Move to next node for the next loop iteration
       currentNode = nextNode;
   }
 
+  // --- 4. SAVE LOG TO DB ---
+  try {
+    await db.insert(workflowExecutions).values({
+      workflowId: flowId,
+      userId: userId,
+      trigger: "Manual Run",
+      status: "Success",
+      details: JSON.stringify(executionLog),
+    });
+  } catch (err) {
+    console.error("Failed to save logs:", err);
+  }
+
+  // --- 5. DEDUCT CREDIT ---
+  await db.update(users)
+      .set({ credits: (currentCredits - 1).toString() })
+      .where(eq(users.clerkId, userId));
+
   return { success: true, logs: executionLog };
+}
+
+// 4. Delete Workflow Function
+export async function deleteWorkflow(workflowId: number) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  await db.delete(workflows)
+    .where(and(eq(workflows.id, workflowId), eq(workflows.userId, userId)));
+
+  revalidatePath("/dashboard/workflows"); 
 }
