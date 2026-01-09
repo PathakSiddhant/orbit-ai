@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Toaster } from "sonner"; // <--- IMPORT
+import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider"; // <-- Yeh naya add kiya hai
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,10 +19,20 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      {/* 'suppressHydrationWarning' add kiya taaki theme error na de */}
+      <html lang="en" suppressHydrationWarning>
         <body className={inter.className}>
-           {children}
-           <Toaster position="bottom-right" /> {/* <--- ADDED HERE */}
+          {/* ThemeProvider yahan lagaya hai taaki puri app pe dark mode chale */}
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            {/* Toaster ko bhi ThemeProvider ke andar rakha hai taaki dark mode mein notifications bhi dark dikhein */}
+            <Toaster position="bottom-right" />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

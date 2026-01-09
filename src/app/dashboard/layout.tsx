@@ -1,41 +1,30 @@
 import { Sidebar } from "@/components/sidebar";
-import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
-   
-  const user = await db.query.users.findFirst({
-      where: eq(users.clerkId, userId!)
-  });
-
+  if(!userId) return null;
+  const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId!) });
   const credits = parseInt(user?.credits || "0");
 
   return (
-    // CHANGE IS HERE: Added 'h-screen' and 'overflow-hidden' to lock window
-    <div className="h-screen w-full relative bg-black overflow-hidden flex">
+    // FIX: Use 'bg-background' and 'text-foreground' to respect the Theme Toggle
+    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans transition-colors duration-300">
       
-      {/* Sidebar - Fixed height handling */}
-      <div className="hidden h-full md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-[80] bg-gray-900">
-        <Sidebar currentCredits={credits} />
-      </div>
+      {/* Sidebar Area */}
+      <aside className="w-64 hidden md:block shrink-0 h-full border-r border-border">
+         <Sidebar currentCredits={credits} />
+      </aside>
 
-      {/* Main Content - Needs to handle scroll internally */}
-      <main className="md:pl-72 w-full h-full flex flex-col">
-        {/* Header - Shrink 0 taaki ye shrink na ho */}
-        <div className="flex justify-end items-center p-4 border-b border-zinc-800 bg-black shrink-0">
-            <UserButton afterSignOutUrl="/" />
-        </div>
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden bg-background">
+        {/* Subtle Grid Pattern for Texture */}
+        <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02] pointer-events-none z-0" />
         
-        {/* Children (Pages) will take remaining height and scroll independently */}
-        <div className="flex-1 h-full overflow-y-auto">
+        <div className="flex-1 overflow-y-auto relative z-10 p-6 md:p-8 scrollbar-hide">
             {children}
         </div>
       </main>
