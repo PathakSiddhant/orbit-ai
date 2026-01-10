@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;       /* White */
+    --background: 0 0% 100%;       /* Pure White */
     --foreground: 240 10% 3.9%;    /* Black Text */
-    --card: 0 0% 100%;             /* White Sidebar */
+    --card: 0 0% 100%;             /* White Cards */
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;       /* Dark Primary */
-    --primary-foreground: 0 0% 98%;
+    --primary: 262 83% 58%;        /* Orbit Violet/Indigo */
+    --primary-foreground: 210 40% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
@@ -19,22 +19,25 @@
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;        /* Light Border */
+    --destructive-foreground: 210 40% 98%;
+    --border: 240 5.9% 90%;        /* Light Grey Borders */
     --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --radius: 0.5rem;
+    --ring: 262 83% 58%;           /* Focus Ring */
+    --radius: 0.75rem;             /* Modern Rounded Corners */
+    
+    /* 🛠️ ADDED: Edge Color for Light Mode */
+    --edge-color: #b1b1b7;         
   }
 
   .dark {
-    --background: 240 10% 3.9%;    /* Black Background */
+    --background: 240 10% 3.9%;    /* Deep Black/Grey */
     --foreground: 0 0% 98%;        /* White Text */
-    --card: 240 10% 3.9%;          /* Black Sidebar */
+    --card: 240 10% 3.9%;          /* Black Cards */
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;           /* White Primary */
-    --primary-foreground: 240 5.9% 10%;
+    --primary: 263 70% 50%;        /* Deep Violet */
+    --primary-foreground: 210 40% 98%;
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
@@ -43,9 +46,12 @@
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;      /* Dark Border */
+    --border: 240 3.7% 15.9%;      /* Dark Grey Borders */
     --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --ring: 263 70% 50%;
+
+    /* 🛠️ ADDED: Edge Color for Dark Mode */
+    --edge-color: #ffffff;
   }
 }
 
@@ -54,6 +60,30 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-300 ease-in-out;
   }
+}
+
+/* --- CUSTOM SCROLLBAR (Premium Feel) --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-300 dark:bg-zinc-800 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-400 dark:bg-zinc-700;
+}
+
+/* Hide scrollbar for clean UI areas */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
