@@ -1,65 +1,88 @@
 "use client";
 
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Handle, Position } from "@xyflow/react";
-import { FileText, HardDrive, Mail, Slack, BrainCircuit } from "lucide-react"; // Added BrainCircuit
+import { memo } from "react";
+// 👇 CHANGE THIS LINE: from 'reactflow' to '@xyflow/react'
+import { Handle, Position, useNodeId } from "@xyflow/react"; 
+import { 
+  Zap, 
+  Slack, 
+  FileText, 
+  HardDrive, 
+  Mail, 
+  Globe, 
+  BrainCircuit, 
+  Database,
+  MousePointerClick
+} from "lucide-react";
+import { Card } from "@/components/ui/card";
 
-// Icon Map: Node ke type ke hisab se icon choose karega
 const iconMap: Record<string, any> = {
-  "trigger": FileText,
+  trigger: Zap,
+  slack: Slack,
+  "ai-agent": BrainCircuit,
   "google-drive": HardDrive,
-  "slack": Slack,
-  "email": Mail,
-  "ai-agent": BrainCircuit, // New AI Icon
+  notion: FileText,
+  "web-scraper": Globe,
+  "send-email": Mail,
+  browser: Globe,
+  email: Mail
 };
 
 const colorMap: Record<string, string> = {
-  "trigger": "text-violet-400",
-  "google-drive": "text-green-400",
-  "slack": "text-pink-400",
-  "email": "text-blue-400",
-  "ai-agent": "text-violet-500", // New AI Color
+  trigger: "text-yellow-500",
+  slack: "text-pink-500",
+  "ai-agent": "text-violet-500",
+  "google-drive": "text-green-500",
+  notion: "text-zinc-500",
+  "web-scraper": "text-orange-500",
+  "send-email": "text-blue-500",
+  browser: "text-orange-500",
+  email: "text-blue-500"
 };
 
-export default function CustomNode({ data }: { data: any }) {
-  const Icon = iconMap[data.type] || FileText; // Default icon
-  const color = colorMap[data.type] || "text-zinc-400"; // Default color
+const CustomNode = ({ data, selected }: any) => {
+  const Icon = iconMap[data.type] || Zap;
+  const colorClass = colorMap[data.type] || "text-zinc-500";
 
   return (
-    <div className="relative">
-      {/* INPUT HANDLE (Top) - Connect from previous node */}
-      {/* Trigger node ko input nahi chahiye, baaki sabko chahiye */}
+    <Card 
+      className={`
+        relative min-w-[200px] border-2 bg-white dark:bg-zinc-900 transition-all shadow-lg
+        ${selected ? "border-indigo-500 shadow-indigo-500/20" : "border-transparent dark:border-zinc-800"}
+      `}
+    >
+      {/* HEADER */}
+      <div className="flex items-center gap-3 p-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className={`h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center ${colorClass}`}>
+          <Icon size={16} />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-zinc-900 dark:text-white leading-none">
+            {data.label || "New Node"}
+          </p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">
+            {data.type?.replace("-", " ")}
+          </p>
+        </div>
+      </div>
+
+      {/* INPUT HANDLES (Left) - Not for Trigger */}
       {data.type !== "trigger" && (
-        <Handle
-          type="target"
-          position={Position.Top}
-          className="!bg-zinc-400 !w-3 !h-3 !-top-2 !border-2 !border-black"
+        <Handle 
+            type="target" 
+            position={Position.Left} 
+            className="w-3 h-3 bg-zinc-400 border-2 border-white dark:border-zinc-900" 
         />
       )}
 
-      {/* THE CARD UI */}
-      <Card className="w-[250px] border-zinc-700 bg-zinc-900 shadow-xl transition-all hover:border-zinc-500 hover:shadow-2xl hover:shadow-violet-500/10">
-        <CardHeader className="flex flex-row items-center gap-4 p-4">
-          <div className={`p-2 rounded-lg bg-zinc-800 ${color} shadow-inner`}>
-             <Icon className="w-5 h-5" />
-          </div>
-          <div>
-            <CardTitle className="text-md font-bold text-white">
-                {data.label}
-            </CardTitle>
-            <CardDescription className="text-xs text-zinc-500">
-                {data.description || "Configure this action"}
-            </CardDescription>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* OUTPUT HANDLE (Bottom) - Connect to next node */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-zinc-400 !w-3 !h-3 !-bottom-2 !border-2 !border-black"
+      {/* OUTPUT HANDLES (Right) */}
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        className="w-3 h-3 bg-indigo-500 border-2 border-white dark:border-zinc-900" 
       />
-    </div>
+    </Card>
   );
-}
+};
+
+export default memo(CustomNode);
