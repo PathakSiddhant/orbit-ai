@@ -10,21 +10,21 @@ import {
     addEdge,
     Connection,
     ReactFlowProvider,
-    useReactFlow
+    useReactFlow,
+    BackgroundVariant,
+    MiniMap
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css"; 
-import { useCallback, useRef, useState, useEffect, useMemo } from "react"; 
+import { useCallback, useRef, useState, useEffect } from "react"; 
+import { useTheme } from "next-themes"; 
 import Tray from "./Tray"; 
-// UPDATED IMPORT: Added runWorkflow
 import { updateWorkflow, runWorkflow } from "@/app/actions/workflows";
 import { Button } from "@/components/ui/button";
-// UPDATED IMPORT: Added Play icon
 import { Save, Loader2, Play } from "lucide-react";
 import { toast } from "sonner"; 
 
 import CustomNode from "./CustomNode"; 
 import SettingsPanel from "./SettingsPanel";
-
 
 type Workflow = typeof workflows.$inferSelect;
 
@@ -32,60 +32,95 @@ interface EditorProps {
   workflow: Workflow;
 }
 
+// ==================================================
+// 1. NODE TYPES CONFIGURATION
+// ==================================================
+const nodeTypes = {
+  OrbitNode: CustomNode, // Legacy support
+  trigger: CustomNode,
+  "google-drive": CustomNode,
+  slack: CustomNode,
+  notion: CustomNode,
+  "ai-agent": CustomNode,
+  "web-scraper": CustomNode,
+  "send-email": CustomNode,
+  browser: CustomNode,
+  email: CustomNode
+};
+
+// ==================================================
+// 2. OUTER COMPONENT (Context Provider Wrapper)
+// ==================================================
 export default function Editor({ workflow }: EditorProps) {
     return (
-        // Provider ko height de di taaki wo collapse na ho
         <ReactFlowProvider>
-            <div className="flex flex-col h-screen w-full bg-black text-white overflow-hidden">
+            <div className="flex flex-col h-full w-full overflow-hidden transition-colors duration-300">
                 <FlowEditor workflow={workflow} />
             </div>
         </ReactFlowProvider>
     )
 }
 
+// ==================================================
+// 3. INNER COMPONENT (Logic & Canvas)
+// ==================================================
 function FlowEditor({ workflow }: EditorProps) {
-  // Load initial data safely
+  const { theme } = useTheme(); 
+  const [mounted, setMounted] = useState(false); 
+
+  // --------------------------------------------------------
+  // 🛠️ FIX: Use CSS Variable for Edges (Instant Theme Switch)
+  // --------------------------------------------------------
+  const defaultEdgeOptions = {
+    animated: true,
+    style: { stroke: "var(--edge-color)", strokeWidth: 2 },
+    type: 'default',
+  };
+
+  // Load initial data & Force CSS Variable on existing edges
   const initialNodes = workflow.nodes ? JSON.parse(workflow.nodes as string) : [];
-  const initialEdges = workflow.edges ? JSON.parse(workflow.edges as string) : [];
+  const initialEdges = workflow.edges 
+    ? JSON.parse(workflow.edges as string).map((edge: any) => ({
+        ...edge,
+        style: { stroke: "var(--edge-color)", strokeWidth: 2 }, // Force style on load
+        animated: true,
+      })) 
+    : [];
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [saving, setSaving] = useState(false);
-  
-  // NEW: State for running simulation
   const [isRunning, setIsRunning] = useState(false);
-
-  // NEW: State for selected node
   const [selectedNode, setSelectedNode] = useState<any>(null);
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null); 
   const { screenToFlowPosition } = useReactFlow(); 
 
-  // DEFINE CUSTOM NODE TYPES
-  // React Flow ko batao ki humara custom node use kare
-  const nodeTypes = useMemo(() => ({
-    OrbitNode: CustomNode, 
-  }), []);
-
-  // Debugging: Check if component mounted
+  // Wait for Client Mount
   useEffect(() => {
-    console.log("Editor Mounted. Initial Nodes:", nodes);
+    setMounted(true);
   }, []);
 
-  // NEW: Handle Click on Node
   const onNodeClick = useCallback((event: React.MouseEvent, node: any) => {
     setSelectedNode(node);
   }, []);
 
+  // Updated onConnect: No longer depends on 'theme' state!
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    (params: Connection) => setEdges((eds) => addEdge({
+        ...params,
+        animated: true,
+        style: { 
+            stroke: "var(--edge-color)", // Use CSS var here too
+            strokeWidth: 2 
+        } 
+    }, eds)),
+    [setEdges], // Removed 'theme' dependency
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    // console.log("Dragging over canvas..."); // Uncomment to debug drag
   }, []);
 
   const onDrop = useCallback(
@@ -93,11 +128,7 @@ function FlowEditor({ workflow }: EditorProps) {
       event.preventDefault();
       
       const type = event.dataTransfer.getData('application/reactflow');
-      console.log("Dropped Item Type:", type); // <--- CHECK CONSOLE FOR THIS
-
-      if (typeof type === 'undefined' || !type) {
-        return;
-      }
+      if (typeof type === 'undefined' || !type) return;
 
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -106,17 +137,17 @@ function FlowEditor({ workflow }: EditorProps) {
 
       const newNode = {
         id: crypto.randomUUID(),
-        type: 'OrbitNode', // <--- CHANGED from 'default' to 'OrbitNode'
+        type: type, 
         position,
         data: { 
-            label: type === 'trigger' ? 'Webhook Trigger' : `${type} Action`, // Better names
-            type: type, // Pass the type (google-drive, slack) so CustomNode can pick icon
-            description: "Not configured yet"
+            label: type === 'trigger' ? 'Webhook Trigger' : `${type.charAt(0).toUpperCase() + type.slice(1)} Node`, 
+            type: type, 
+            description: "Click to configure"
         },
       };
 
       setNodes((nds) => nds.concat(newNode));
-      toast.success("Node added!"); 
+      toast.success(`${type} node added`); 
     },
     [screenToFlowPosition, setNodes],
   );
@@ -138,14 +169,11 @@ function FlowEditor({ workflow }: EditorProps) {
      }
   };
 
-  // NEW: Run Workflow Function
   const onRun = async () => {
      setIsRunning(true);
-     // 1. Pehle Save karo (taaki latest changes run hon)
      await onSave(); 
      
      try {
-        // 2. Run Server Action
         const result = await runWorkflow(workflow.id);
         
         if (!result.success) {
@@ -153,35 +181,45 @@ function FlowEditor({ workflow }: EditorProps) {
             return;
         }
 
-        // 3. Show Logs (Hacker Style)
         toast.message("Execution Finished", {
             description: (
-                <div className="flex flex-col gap-1 mt-2 p-2 bg-zinc-900 rounded-md border border-zinc-800">
+                <div className="flex flex-col gap-1 mt-2 max-h-[200px] overflow-y-auto p-2 bg-zinc-100 dark:bg-zinc-900 rounded-md border border-zinc-200 dark:border-zinc-800">
                     {result.logs?.map((log: string, i: number) => (
-                        <span key={i} className="text-xs font-mono text-zinc-400">
+                        <span key={i} className="text-xs font-mono text-zinc-600 dark:text-zinc-400 break-all">
                             {log}
                         </span>
                     ))}
                 </div>
             ),
-            duration: 5000, // 5 seconds tak dikhao
+            duration: 6000, 
         });
 
      } catch (err) {
         toast.error("Execution failed");
-        console.error(err);
      } finally {
         setIsRunning(false);
      }
   };
 
+  if (!mounted) {
+    return (
+        <div className="h-full w-full flex items-center justify-center bg-zinc-50 dark:bg-[#0a0a0a]">
+            <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+        </div>
+    );
+  }
+
   return (
     <>
-       {/* Top Bar */}
-       <div className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-900 h-16 shrink-0">
-            <h2 className="font-bold text-white">{workflow.name}</h2>
+       {/* 1. TOP BAR */}
+       <div className="flex justify-between items-center p-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black h-16 shrink-0 transition-colors duration-300">
+            <h2 className="font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                {workflow.name}
+                <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                    {workflow.status}
+                </span>
+            </h2>
             <div className="flex gap-2">
-                {/* RUN BUTTON */}
                 <Button 
                     onClick={onRun} 
                     disabled={isRunning || saving} 
@@ -191,20 +229,19 @@ function FlowEditor({ workflow }: EditorProps) {
                     Run
                 </Button>
 
-                {/* SAVE BUTTON */}
-                <Button onClick={onSave} disabled={saving || isRunning} variant="outline" className="text-black bg-white hover:bg-zinc-200">
+                <Button onClick={onSave} disabled={saving || isRunning} variant="outline" className="text-zinc-700 dark:text-white bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">
                     {saving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Save
                 </Button>
             </div>
        </div>
        
-       {/* Main Content Area */}
-       <div className="flex flex-1 h-[calc(100vh-64px)] w-full">
+       {/* 2. MAIN CONTENT AREA */}
+       <div className="flex flex-1 h-[calc(100vh-64px)] w-full overflow-hidden">
             <Tray />
             
             {/* Canvas Area */}
-            <div className="flex-1 h-full w-full bg-zinc-950 relative" ref={reactFlowWrapper}>
+            <div className="flex-1 h-full w-full bg-zinc-50 dark:bg-[#0a0a0a] relative transition-colors duration-300" ref={reactFlowWrapper}>
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
@@ -213,17 +250,25 @@ function FlowEditor({ workflow }: EditorProps) {
                     onConnect={onConnect}
                     onDragOver={onDragOver}
                     onDrop={onDrop}
-                    onNodeClick={onNodeClick} // <--- ADDED THIS PROP
+                    onNodeClick={onNodeClick} 
                     nodeTypes={nodeTypes}
+                    defaultEdgeOptions={defaultEdgeOptions} // 👈 Added default options here
                     fitView
                 >
-                    <Background color="#555" gap={20} size={1} />
-                    <Controls className="bg-white text-black" />
+                    <Background 
+                        color={theme === 'dark' ? '#333' : '#e1e1e1'} 
+                        gap={20} 
+                        size={1} 
+                        variant={BackgroundVariant.Dots}
+                    />
+                    
+                    <Controls className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 fill-zinc-900 dark:fill-white" />
+                    <MiniMap className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800" />
                 </ReactFlow>
             </div>
        </div>
 
-       {/* THE SETTINGS PANEL (Renders on top or side depending on CSS) */}
+       {/* SETTINGS PANEL */}
        <SettingsPanel 
             selectedNode={selectedNode} 
             setNodes={setNodes}

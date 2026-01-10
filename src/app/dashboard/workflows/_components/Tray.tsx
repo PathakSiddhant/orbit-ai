@@ -1,3 +1,5 @@
+"use client"; // Event handlers (drag/drop) ke liye ye zaroori hai
+
 import { Card } from "@/components/ui/card";
 import { Slack, Mail, FileText, HardDrive } from "lucide-react"; // Import Icons
 
@@ -47,6 +49,31 @@ export default function Tray() {
           <span className="text-sm">Slack</span>
         </Card>
       </div>
+
+      {/* Draggable Node: Notion */}
+      <div
+        className="cursor-grab active:cursor-grabbing"
+        draggable
+        onDragStart={(e) => onDragStart(e, "notion")}
+      >
+        <Card className="p-3 bg-zinc-800 border-zinc-700 hover:border-white transition flex items-center gap-2 text-white">
+           {/* Simple 'N' icon for Notion */}
+           <span className="font-bold font-serif px-1">N</span>
+           <span className="text-sm">Notion</span>
+        </Card>
+      </div>
+
+      {/* Draggable Node: Browser (Web Scraper) - ADDED THIS ✅ */}
+      <div
+        className="cursor-grab active:cursor-grabbing"
+        draggable
+        onDragStart={(e) => onDragStart(e, "browser")}
+      >
+        <Card className="p-3 bg-zinc-800 border-zinc-700 hover:border-orange-500 transition flex items-center gap-2 text-white">
+           <span className="text-lg">🌐</span>
+           <span className="text-sm">Web Scraper</span>
+        </Card>
+      </div>
       
        {/* Draggable Node: Email */}
        <div
@@ -60,7 +87,7 @@ export default function Tray() {
         </Card>
       </div>
 
-      {/* Draggable Node: AI Agent (New Addition) */}
+      {/* Draggable Node: AI Agent */}
       <div
         className="cursor-grab active:cursor-grabbing"
         draggable
