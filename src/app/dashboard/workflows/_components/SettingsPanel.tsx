@@ -396,7 +396,7 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
           )}
           
           {/* =======================
-              NOTION SETTINGS (👇 UPDATED DROPDOWN)
+              NOTION SETTINGS (👇 UPDATED WITH MANUAL INPUT)
              ======================= */}
            {currentNode.data.type === "notion" && (
              <div className="space-y-4">
@@ -454,8 +454,19 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                                     })}
                                 </select>
                             )}
+                        </div>
+
+                        {/* 👇 NEW: MANUAL ID OVERRIDE (THE FIX) */}
+                        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                            <Label className="mb-2 block text-xs uppercase text-zinc-500">Or Paste Database ID Manually</Label>
+                            <Input 
+                                placeholder="e.g. 2e625184b5928011b1bf000b0a0d8cd5"
+                                value={currentNode.data.databaseId || ""}
+                                onChange={(e) => handleChange(e, 'databaseId')}
+                                className="font-mono text-xs"
+                            />
                             <p className="text-[10px] text-zinc-500 mt-2">
-                                Tip: Select an item marked <b>[DATABASE]</b>. Pages might not work for inserting rows.
+                                *If dropdown fails: Open Notion DB as Full Page → Copy Link → The 32-char code is the ID.
                             </p>
                         </div>
                      </>
