@@ -9,7 +9,8 @@ import { useNodes } from "@xyflow/react";
 import { HardDrive, CheckCircle2, FileText, Folder, Lock, Globe, Mail, Bot, MessageSquare, Database, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getGoogleAuthUrl, getDriveFiles, checkGoogleConnection } from "@/app/actions/google"; // 👈 Added checkGoogleConnection
+import { getGoogleAuthUrl, getDriveFiles, checkGoogleConnection } from "@/app/actions/google"; 
+import { getNotionAuthUrl, getNotionDatabases, checkNotionConnection } from "@/app/actions/notion"; 
 
 interface SettingsPanelProps {
   selectedNode: { id: string; type: string; data: any } | null;
@@ -19,11 +20,15 @@ interface SettingsPanelProps {
 
 export default function SettingsPanel({ selectedNode, setNodes, onClose }: SettingsPanelProps) {
   const [isConnected, setIsConnected] = useState(false); 
-  const [isLoading, setIsLoading] = useState(false); // 👈 New Loading State
+  const [isLoading, setIsLoading] = useState(false); 
   
-  // STATE FOR REAL FILES
+  // STATE FOR REAL FILES (Google Drive)
   const [driveFiles, setDriveFiles] = useState<any[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+
+  // STATE FOR NOTION
+  const [notionDbs, setNotionDbs] = useState<any[]>([]);
+  const [loadingNotion, setLoadingNotion] = useState(false);
 
   // 1. Get ALL current nodes from React Flow state
   const nodes = useNodes();
@@ -31,7 +36,7 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
   // 2. Find the LIVE version of the selected node to ensure real-time updates
   const currentNode = nodes.find((n) => n.id === selectedNode?.id);
 
-  // Helper function defined early so useEffect can use it
+  // --- GOOGLE DRIVE HELPERS ---
   const fetchFiles = async () => {
     setLoadingFiles(true);
     const result = await getDriveFiles();
@@ -43,54 +48,90 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
     setLoadingFiles(false);
   };
 
-  // 👇 NEW: Check Connection on Mount or Node Change
-  useEffect(() => {
-    const init = async () => {
-      // Agar node Google Drive hai, tabhi check karo
-      if (selectedNode?.data.type === "google-drive") {
-        setIsLoading(true);
-        try {
-          const connected = await checkGoogleConnection(); // Server Action
-          setIsConnected(connected);
-          
-          if (connected) {
-            await fetchFiles(); // Agar connected hai, files load kar lo
-          }
-        } catch (error) {
-          console.error("Connection check failed", error);
-        }
-        setIsLoading(false);
-      } else {
-        // Reset states for other nodes
-        setIsConnected(false);
-        setDriveFiles([]);
-      }
-    };
-
-    if (selectedNode) {
-      init();
-    }
-  }, [selectedNode?.id]); // Run whenever node changes
-
-  // 3. Handle Google Connection (Popup)
   const handleConnectGoogle = async () => {
       try {
         const url = await getGoogleAuthUrl();
-        if (url) {
-            window.open(url, "_blank", "width=600,height=600");
-        }
+        if (url) window.open(url, "_blank", "width=600,height=600");
       } catch (error) {
         toast.error("Failed to start Google Auth");
       }
   };
 
-  // 4. Listen for Success Message from Popup
+  // --- NOTION HELPERS ---
+  const fetchNotionDbs = async () => {
+      setLoadingNotion(true);
+      const result = await getNotionDatabases();
+      if(result.success) {
+          setNotionDbs(result.databases || []);
+      } else {
+          toast.error("Failed to fetch Notion databases");
+      }
+      setLoadingNotion(false);
+  };
+
+  const handleConnectNotion = async () => {
+      try {
+        const url = await getNotionAuthUrl();
+        if (url) window.open(url, "_blank", "width=600,height=600");
+      } catch (error) {
+        toast.error("Failed to start Notion Auth");
+      }
+  };
+
+  // 👇 CHECK CONNECTION ON MOUNT OR NODE CHANGE
+  useEffect(() => {
+    const init = async () => {
+      setIsLoading(true);
+      
+      // Case 1: Google Drive
+      if (selectedNode?.data.type === "google-drive") {
+        try {
+          const connected = await checkGoogleConnection();
+          setIsConnected(connected);
+          if (connected) await fetchFiles();
+        } catch (error) {
+          console.error("Google check failed", error);
+        }
+      } 
+      // Case 2: Notion
+      else if (selectedNode?.data.type === "notion") {
+          try {
+              const connected = await checkNotionConnection();
+              setIsConnected(connected);
+              if (connected) await fetchNotionDbs();
+          } catch (error) {
+              console.error("Notion check failed", error);
+          }
+      }
+      // Case 3: Other Nodes
+      else {
+        setIsConnected(false);
+        setDriveFiles([]);
+        setNotionDbs([]);
+      }
+      
+      setIsLoading(false);
+    };
+
+    if (selectedNode) {
+      init();
+    }
+  }, [selectedNode?.id]); 
+
+  // 👇 LISTEN FOR SUCCESS MESSAGES (POPUP)
   useEffect(() => {
       const handleMessage = (event: MessageEvent) => {
+          // Google Success
           if (event.data === "google-connected") {
               setIsConnected(true);
               toast.success("Drive Connected!");
-              fetchFiles(); // Auto fetch files immediately
+              fetchFiles();
+          }
+          // Notion Success
+          if (event.data === "notion-connected") {
+              setIsConnected(true);
+              toast.success("Notion Connected!");
+              fetchNotionDbs();
           }
       };
       window.addEventListener("message", handleMessage);
@@ -121,7 +162,7 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
           if (node.id === selectedNode.id) {
             return {
               ...node,
-              data: { ...node.data, fileId, fileName }, // Save Name too
+              data: { ...node.data, fileId, fileName }, 
             };
           }
           return node;
@@ -182,7 +223,6 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
              ======================= */}
           {currentNode.data.type === "google-drive" && (
              <div className="space-y-4">
-                 {/* 👇 LOADING STATE UI */}
                  {isLoading ? (
                      <div className="flex flex-col items-center justify-center py-8 space-y-3 text-zinc-500">
                          <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
@@ -214,7 +254,6 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                         </div>
 
                         <div>
-                            {/* Header with Refresh Button */}
                             <div className="flex justify-between items-center mb-2">
                                 <Label className="text-xs text-zinc-500 uppercase tracking-wider">Recent Files</Label>
                                 <Button 
@@ -227,13 +266,10 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                                     {loadingFiles ? <Loader2 className="animate-spin h-3 w-3" /> : "Refresh"}
                                 </Button>
                             </div>
-
-                            {/* REAL FILES LIST */}
                             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                                 {driveFiles.length === 0 && !loadingFiles && (
                                     <p className="text-xs text-zinc-500 text-center py-4 italic">No files found or access denied.</p>
                                 )}
-                                
                                 {driveFiles.map((file) => (
                                     <div 
                                         key={file.id} 
@@ -360,28 +396,70 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
           )}
           
           {/* =======================
-              NOTION
+              NOTION SETTINGS (👇 UPDATED DROPDOWN)
              ======================= */}
            {currentNode.data.type === "notion" && (
              <div className="space-y-4">
-                 <div>
-                    <Label className="text-xs text-zinc-500">Database ID</Label>
-                    <Input 
-                        value={currentNode.data.databaseId || ""}
-                        onChange={(e) => handleChange(e, 'databaseId')}
-                        placeholder="e.g. 8a3b..."
-                        className="mt-1"
-                    />
-                 </div>
-                 <div>
-                    <Label className="text-xs text-zinc-500">Page Content</Label>
-                    <Input 
-                        value={currentNode.data.todo || ""}
-                        onChange={(e) => handleChange(e, 'todo')}
-                        placeholder="e.g. New Entry"
-                        className="mt-1"
-                    />
-                 </div>
+                 {isLoading ? (
+                     <div className="flex flex-col items-center justify-center py-8 space-y-3 text-zinc-500">
+                         <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+                         <span className="text-sm">Checking connection...</span>
+                     </div>
+                 ) : !isConnected ? (
+                     <div className="p-6 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col items-center justify-center text-center gap-4 bg-zinc-50 dark:bg-zinc-900/50">
+                         <div className="h-12 w-12 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-600 dark:text-zinc-400">
+                             <FileText size={24} />
+                         </div>
+                         <div>
+                             <p className="font-bold text-zinc-900 dark:text-white">Connect Notion</p>
+                             <p className="text-xs text-zinc-500">Access pages and databases.</p>
+                         </div>
+                         <Button 
+                            onClick={handleConnectNotion} 
+                            className="w-full bg-zinc-900 dark:bg-white text-white dark:text-black hover:opacity-90"
+                         >
+                             Connect Workspace
+                         </Button>
+                     </div>
+                 ) : (
+                     <>
+                        <div className="flex items-center justify-between p-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                            <span className="text-xs font-bold flex items-center gap-2">
+                                <CheckCircle2 size={14} className="text-green-500"/> Connected
+                            </span>
+                            <span className="text-[10px] cursor-pointer hover:underline text-red-500" onClick={() => setIsConnected(false)}>Disconnect</span>
+                        </div>
+
+                        <div>
+                            <Label className="mb-2 block text-xs text-zinc-500 uppercase tracking-wider">Select Database / Page</Label>
+                            {loadingNotion ? <p className="text-xs italic text-zinc-500">Loading databases...</p> : (
+                                <select 
+                                    className="w-full p-2 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded-md text-sm dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    value={currentNode.data.databaseId || ""}
+                                    onChange={(e) => handleChange(e, 'databaseId')}
+                                >
+                                    <option value="">Select an item...</option>
+                                    {notionDbs.map((db: any) => {
+                                        // Handle Title safely (Pages use 'properties', Databases use 'title')
+                                        const title = db.title?.[0]?.plain_text 
+                                            || db.properties?.title?.title?.[0]?.plain_text 
+                                            || "Untitled";
+                                        
+                                        return (
+                                            <option key={db.id} value={db.id}>
+                                                {/* 👇 Show Type clearly */}
+                                                [{db.object.toUpperCase()}] {title}
+                                            </option>
+                                        )
+                                    })}
+                                </select>
+                            )}
+                            <p className="text-[10px] text-zinc-500 mt-2">
+                                Tip: Select an item marked <b>[DATABASE]</b>. Pages might not work for inserting rows.
+                            </p>
+                        </div>
+                     </>
+                 )}
              </div>
            )}
 
