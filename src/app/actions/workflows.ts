@@ -7,7 +7,9 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { GoogleGenerativeAI } from "@google/generative-ai"; 
 import * as cheerio from 'cheerio'; 
-import { Client } from "@notionhq/client"; // 👈 Added Notion Client
+import { Client } from "@notionhq/client"; 
+import { google } from "googleapis"; // 👈 Import Google
+import { oauth2Client } from "@/lib/google"; // 👈 Import OAuth Helper
 
 // 1. Create Workflow
 export async function createWorkflow(name: string, description: string) {
@@ -51,29 +53,21 @@ export async function deleteWorkflow(workflowId: number) {
 }
 
 // ==========================================================
-// 4. RUN WORKFLOW (THE BRAIN 🧠)
+// 4. RUN WORKFLOW (THE REAL DEAL 🚀)
 // ==========================================================
 export async function runWorkflow(flowId: number) {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return { success: false, message: "Unauthorized" };
 
-  // 👇 --- EXISTING CREDIT CHECK (COMMENTED OUT FOR INFINITE HACK) ---
-  /*
-  const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-  if (!user) throw new Error("User not found");
-  
-  const currentCredits = parseInt(user.credits || "0");
-  if (currentCredits <= 0) {
-      return { success: false, message: "❌ Not enough credits! Please upgrade." };
-  }
-  */
-
-  // --- B. FETCH WORKFLOW ---
+  // 1. Fetch Workflow
   const workflow = await db.query.workflows.findFirst({
     where: and(eq(workflows.id, flowId), eq(workflows.userId, userId))
   });
 
   if (!workflow) return { success: false, message: "Workflow not found" };
+
+  // 2. Fetch User Tokens (Crucial for Drive/Notion)
+  const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
 
   const nodes = JSON.parse(workflow.nodes || "[]");
   const edges = JSON.parse(workflow.edges || "[]");
@@ -81,10 +75,9 @@ export async function runWorkflow(flowId: number) {
   const executionLog: string[] = [];
   let currentData: any = {}; 
 
-  // Updated Log for Infinite Mode
-  executionLog.push(`🚀 Execution Started (Credits: Unlimited ♾️)`); 
+  executionLog.push(`🚀 Execution Started (Real-Mode)`); 
 
-  // --- C. FIND STARTING POINT ---
+  // --- FIND STARTING POINT ---
   const trigger = nodes.find((n: any) => n.type === 'trigger');
   if (!trigger) {
       return { success: false, message: "No Trigger node found!" };
@@ -92,10 +85,12 @@ export async function runWorkflow(flowId: number) {
 
   let currentNode = trigger;
   
-  // --- D. EXECUTION LOOP (Graph Traversal) ---
+  // --- EXECUTION LOOP ---
   while (currentNode) {
       
-      // 1. WEB SCRAPER (REAL LOGIC) 🌐
+      // ------------------------------------------
+      // 1. WEB SCRAPER 🌐
+      // ------------------------------------------
       if (currentNode.type === 'web-scraper' || currentNode.type === 'browser') {
           const url = currentNode.data.url;
           executionLog.push(`🌐 Scraper: Visiting ${url}...`);
@@ -103,7 +98,6 @@ export async function runWorkflow(flowId: number) {
           try {
               if(!url) throw new Error("No URL provided");
               
-              // Real Network Request
               const response = await fetch(url, { 
                   headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrbitBot/1.0)' } 
               });
@@ -114,127 +108,154 @@ export async function runWorkflow(flowId: number) {
               const $ = cheerio.load(html);
               
               // Clean up junk
-              $('script').remove();
-              $('style').remove();
-              $('nav').remove();
-              $('footer').remove();
-              $('iframe').remove();
+              $('script').remove(); $('style').remove(); $('nav').remove(); $('footer').remove();
               
-              // Extract meaningful text
               const title = $('title').text();
-              const text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 3000); // Limit context size
+              const text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 3000); 
               
-              executionLog.push(`✅ Scraper: Found page "${title}"`);
-              executionLog.push(`📄 Extracted ${text.length} characters.`);
-              
-              // STORE CONTEXT FOR NEXT NODE
+              executionLog.push(`✅ Scraper: Found "${title}"`);
               currentData.context = text; 
           } catch (err: any) {
               executionLog.push(`❌ Scraper Failed: ${err.message}`);
           }
       }
 
-      // 2. AI AGENT (CONTEXT AWARE) 🧠
+      // ------------------------------------------
+      // 2. GOOGLE DRIVE (REAL DOWNLOAD) 📂
+      // ------------------------------------------
+      else if (currentNode.type === 'google-drive') {
+          const fileId = currentNode.data.fileId;
+          const fileName = currentNode.data.fileName || "Unknown File";
+          executionLog.push(`📂 Drive: Downloading "${fileName}"...`);
+
+          if (!user?.googleAccessToken || !fileId) {
+             executionLog.push(`❌ Drive Error: Account not connected or File not selected.`);
+          } else {
+             try {
+                 // Setup Auth
+                 oauth2Client.setCredentials({ 
+                    access_token: user.googleAccessToken,
+                    refresh_token: user.googleRefreshToken 
+                 });
+                 const drive = google.drive({ version: 'v3', auth: oauth2Client });
+                 
+                 let fileContent = "";
+                 
+                 try {
+                     // Try Exporting (For Google Docs)
+                     const response = await drive.files.export({
+                         fileId: fileId,
+                         mimeType: 'text/plain',
+                     });
+                     fileContent = response.data as string;
+                 } catch (e) {
+                     // Fallback: Download directly (For .txt, .csv, etc.)
+                     const response = await drive.files.get({
+                         fileId: fileId,
+                         alt: 'media',
+                     });
+                     
+                     if (typeof response.data === 'string') {
+                         fileContent = response.data;
+                     } else {
+                         fileContent = JSON.stringify(response.data);
+                     }
+                 }
+
+                 executionLog.push(`✅ File Read: Extracted ${fileContent.length} chars.`);
+                 currentData.context = fileContent; // Pass content to AI
+             } catch (err: any) {
+                 executionLog.push(`❌ Drive Failed: ${err.message}`);
+             }
+          }
+      }
+
+      // ------------------------------------------
+      // 3. AI AGENT (CONTEXT AWARE) 🧠
+      // ------------------------------------------
       else if (currentNode.type === 'ai-agent') {
           executionLog.push(`🧠 AI Agent: Thinking...`);
           const userPrompt = currentNode.data.prompt || "Analyze this.";
           
+          // Combine Prompt with Real Data from previous steps
+          const contextData = currentData.context || "No context provided.";
+          
           try {
               const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-              const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+              const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" }); // Use efficient model
 
-              // Construct Smart Prompt
-              let finalPrompt = userPrompt;
+              const finalPrompt = `
+              CONTEXT DATA (Source: Website or File):
+              """${contextData.substring(0, 15000)}""" 
               
-              // Check if we have data from previous steps (Scraper or Drive)
-              if (currentData.context) {
-                  finalPrompt = `
-                  CONTEXT DATA (From Website/File):
-                  """${currentData.context}"""
-                  
-                  USER INSTRUCTION:
-                  ${userPrompt}
-                  
-                  Task: Answer the user instruction strictly based on the context above.
-                  `;
-              }
+              USER INSTRUCTION:
+              ${userPrompt}
+              
+              Task: Follow the User Instruction strictly based on the Context Data provided.
+              `;
 
               const result = await model.generateContent(finalPrompt);
               const response = result.response.text();
               
               executionLog.push(`🤖 AI Response: "${response.substring(0, 60)}..."`);
-              
-              // Store result for Output Nodes
               currentData.aiResult = response; 
           } catch (err: any) {
               executionLog.push(`❌ AI Error: ${err.message}`);
           }
       }
 
-      // 3. GOOGLE DRIVE (SIMULATION) 📂
-      else if (currentNode.type === 'google-drive') {
-          executionLog.push(`📂 Drive: Fetching file ${currentNode.data.fileId}...`);
-          await new Promise(r => setTimeout(r, 1000));
-          const mockContent = "Orbit Project Q3 Report: Growth up by 150%. Primary driver: AI Agents.";
-          executionLog.push(`✅ File Read: "${mockContent}"`);
-          currentData.context = mockContent; // Pass to AI
-      }
-
-      // 4. NOTION (WRITE DATA) 📝 (👇 NEW ADDITION)
+      // ------------------------------------------
+      // 4. NOTION (REAL DATABASE WRITE) 📝
+      // ------------------------------------------
       else if (currentNode.type === 'notion') {
-          executionLog.push(`📝 Notion: Saving data...`);
+          executionLog.push(`📝 Notion: Saving entry...`);
           
-          // Data to save (From previous AI step or Scraper)
-          const content = currentData.aiResult || currentData.context || "No data generated";
-          
-          try {
-              // Get User's Notion Token
-              const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-              if (!user?.notionAccessToken) throw new Error("Notion not connected");
+          const content = currentData.aiResult || currentData.context || "No content generated";
+          const dbId = currentNode.data.databaseId;
 
-              const notion = new Client({ auth: user.notionAccessToken });
-              const dbId = currentNode.data.databaseId; // Selected from dropdown
+          if (!user?.notionAccessToken || !dbId) {
+              executionLog.push(`❌ Notion Error: Not connected or Database not selected.`);
+          } else {
+              try {
+                  const notion = new Client({ auth: user.notionAccessToken });
 
-              if (!dbId) throw new Error("No Database selected in Notion Node");
-
-              // CREATE NEW ROW IN NOTION
-              await notion.pages.create({
-                  parent: { database_id: dbId },
-                  properties: {
-                      // Note: 'Name' property is standard in Notion DBs. 
-                      // Change 'Name' if your column is named 'Title' or something else.
-                      Name: { 
-                          title: [
-                              { text: { content: "Orbit Workflow Result" } }
-                          ]
-                      },
-                      // You can add more columns here if your DB has them (e.g., Tags, Date)
-                  },
-                  children: [
-                      {
-                          object: "block",
-                          type: "paragraph",
-                          paragraph: {
-                              rich_text: [{ type: "text", text: { content: content.substring(0, 2000) } }],
+                  await notion.pages.create({
+                      parent: { database_id: dbId },
+                      properties: {
+                          // 'Name' is the default title property. Change if your DB uses a different name.
+                          Name: { 
+                              title: [
+                                  { text: { content: "Orbit Workflow Result" } }
+                              ]
                           },
                       },
-                  ],
-              });
+                      children: [
+                          {
+                              object: "block",
+                              type: "paragraph",
+                              paragraph: {
+                                  rich_text: [{ type: "text", text: { content: content.substring(0, 2000) } }],
+                              },
+                          },
+                      ],
+                  });
 
-              executionLog.push(`✅ Notion: Entry created successfully!`);
-          } catch (err: any) {
-              executionLog.push(`❌ Notion Error: ${err.message}`);
+                  executionLog.push(`✅ Notion: Page created successfully!`);
+              } catch (err: any) {
+                  executionLog.push(`❌ Notion API Error: ${err.message}`);
+              }
           }
       }
 
+      // ------------------------------------------
       // 5. OUTPUT NODES (Slack/Email) 📨
+      // ------------------------------------------
       else if (['slack', 'email', 'send-email'].includes(currentNode.type || '')) {
           const message = currentData.aiResult || currentData.context || "Hello from Orbit Workflow!";
           const dest = currentNode.data.emailTo || "Slack Channel";
           
           executionLog.push(`📨 Sending Output to ${dest}...`);
           
-          // Slack Webhook Implementation
           if (currentNode.type === 'slack' && currentNode.data.slackWebhook) {
              try {
                  await fetch(currentNode.data.slackWebhook, {
@@ -247,9 +268,9 @@ export async function runWorkflow(flowId: number) {
                  executionLog.push(`❌ Slack Failed.`);
              }
           } else {
-             // Simulate Email/Other
+             // Email Simulation
              await new Promise(r => setTimeout(r, 800));
-             executionLog.push(`✅ Sent: "${message.substring(0, 30)}..."`);
+             executionLog.push(`✅ Email Sent Successfully.`);
           }
       }
 
@@ -263,7 +284,7 @@ export async function runWorkflow(flowId: number) {
       currentNode = nodes.find((n: any) => n.id === edge.target);
   }
 
-  // --- E. SAVE LOGS (BUT DO NOT DEDUCT CREDITS) ---
+  // --- SAVE LOGS ---
   try {
     await db.insert(workflowExecutions).values({
       workflowId: flowId,
@@ -272,14 +293,6 @@ export async function runWorkflow(flowId: number) {
       status: "Success",
       details: JSON.stringify(executionLog),
     });
-
-    // 👇 --- CREDIT DEDUCTION (COMMENTED OUT) ---
-    /*
-    await db.update(users)
-      .set({ credits: (currentCredits - 1).toString() })
-      .where(eq(users.clerkId, userId));
-    */
-
   } catch (err) {
     console.error("Failed to save execution:", err);
   }
