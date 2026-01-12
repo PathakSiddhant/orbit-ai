@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { GoogleGenerativeAI } from "@google/generative-ai"; 
 import * as cheerio from 'cheerio'; 
+import { Client } from "@notionhq/client"; // 👈 Added Notion Client
 
 // 1. Create Workflow
 export async function createWorkflow(name: string, description: string) {
@@ -179,7 +180,54 @@ export async function runWorkflow(flowId: number) {
           currentData.context = mockContent; // Pass to AI
       }
 
-      // 4. OUTPUT NODES (Slack/Email) 📨
+      // 4. NOTION (WRITE DATA) 📝 (👇 NEW ADDITION)
+      else if (currentNode.type === 'notion') {
+          executionLog.push(`📝 Notion: Saving data...`);
+          
+          // Data to save (From previous AI step or Scraper)
+          const content = currentData.aiResult || currentData.context || "No data generated";
+          
+          try {
+              // Get User's Notion Token
+              const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
+              if (!user?.notionAccessToken) throw new Error("Notion not connected");
+
+              const notion = new Client({ auth: user.notionAccessToken });
+              const dbId = currentNode.data.databaseId; // Selected from dropdown
+
+              if (!dbId) throw new Error("No Database selected in Notion Node");
+
+              // CREATE NEW ROW IN NOTION
+              await notion.pages.create({
+                  parent: { database_id: dbId },
+                  properties: {
+                      // Note: 'Name' property is standard in Notion DBs. 
+                      // Change 'Name' if your column is named 'Title' or something else.
+                      Name: { 
+                          title: [
+                              { text: { content: "Orbit Workflow Result" } }
+                          ]
+                      },
+                      // You can add more columns here if your DB has them (e.g., Tags, Date)
+                  },
+                  children: [
+                      {
+                          object: "block",
+                          type: "paragraph",
+                          paragraph: {
+                              rich_text: [{ type: "text", text: { content: content.substring(0, 2000) } }],
+                          },
+                      },
+                  ],
+              });
+
+              executionLog.push(`✅ Notion: Entry created successfully!`);
+          } catch (err: any) {
+              executionLog.push(`❌ Notion Error: ${err.message}`);
+          }
+      }
+
+      // 5. OUTPUT NODES (Slack/Email) 📨
       else if (['slack', 'email', 'send-email'].includes(currentNode.type || '')) {
           const message = currentData.aiResult || currentData.context || "Hello from Orbit Workflow!";
           const dest = currentNode.data.emailTo || "Slack Channel";
