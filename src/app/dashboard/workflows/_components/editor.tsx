@@ -18,8 +18,10 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useRef, useState, useEffect } from "react"; 
 import { useTheme } from "next-themes"; 
 import Tray from "./Tray"; 
-import { updateWorkflow, runWorkflow } from "@/app/actions/workflows";
+import { updateWorkflow, runWorkflow, publishWorkflow } from "@/app/actions/workflows"; // 👈 Added publishWorkflow
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch"; // 👈 Added Switch
+import { Label } from "@/components/ui/label";   // 👈 Added Label
 import { Save, Loader2, Play } from "lucide-react";
 import { toast } from "sonner"; 
 
@@ -93,6 +95,9 @@ function FlowEditor({ workflow }: EditorProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   
+  // 👈 New State for Publishing
+  const [isPublished, setIsPublished] = useState(workflow.status === "PUBLISHED");
+
   const reactFlowWrapper = useRef<HTMLDivElement>(null); 
   const { screenToFlowPosition } = useReactFlow(); 
 
@@ -201,6 +206,18 @@ function FlowEditor({ workflow }: EditorProps) {
      }
   };
 
+  // 👈 New Handler for Publishing
+  const handlePublish = async (val: boolean) => {
+      setIsPublished(val); // Optimistic UI update
+      toast.promise(publishWorkflow(workflow.id, val), {
+         loading: val ? "Publishing..." : "Pausing...",
+         success: (data) => {
+             return data.message;
+         },
+         error: "Failed to update status"
+      });
+  };
+
   if (!mounted) {
     return (
         <div className="h-full w-full flex items-center justify-center bg-zinc-50 dark:bg-[#0a0a0a]">
@@ -215,24 +232,38 @@ function FlowEditor({ workflow }: EditorProps) {
        <div className="flex justify-between items-center p-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black h-16 shrink-0 transition-colors duration-300">
             <h2 className="font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                 {workflow.name}
-                <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                    {workflow.status}
-                </span>
             </h2>
-            <div className="flex gap-2">
-                <Button 
-                    onClick={onRun} 
-                    disabled={isRunning || saving} 
-                    className="bg-green-600 text-white hover:bg-green-700 border-green-500"
-                >
-                    {isRunning ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
-                    Run
-                </Button>
+            
+            <div className="flex items-center gap-4">
+                {/* 👈 Publish Switch */}
+                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 p-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <Switch 
+                        id="publish-mode" 
+                        checked={isPublished}
+                        onCheckedChange={handlePublish}
+                        className="data-[state=checked]:bg-green-500"
+                    />
+                    <Label htmlFor="publish-mode" className="text-xs font-medium cursor-pointer text-zinc-600 dark:text-zinc-300">
+                        {isPublished ? "Live" : "Draft"}
+                    </Label>
+                </div>
 
-                <Button onClick={onSave} disabled={saving || isRunning} variant="outline" className="text-zinc-700 dark:text-white bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                    {saving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save
-                </Button>
+                {/* Existing Run & Save Buttons */}
+                <div className="flex gap-2">
+                    <Button 
+                        onClick={onRun} 
+                        disabled={isRunning || saving} 
+                        className="bg-green-600 text-white hover:bg-green-700 border-green-500"
+                    >
+                        {isRunning ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
+                        Run
+                    </Button>
+
+                    <Button onClick={onSave} disabled={saving || isRunning} variant="outline" className="text-zinc-700 dark:text-white bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                        {saving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                        Save
+                    </Button>
+                </div>
             </div>
        </div>
        
@@ -252,7 +283,7 @@ function FlowEditor({ workflow }: EditorProps) {
                     onDrop={onDrop}
                     onNodeClick={onNodeClick} 
                     nodeTypes={nodeTypes}
-                    defaultEdgeOptions={defaultEdgeOptions} // 👈 Added default options here
+                    defaultEdgeOptions={defaultEdgeOptions} 
                     fitView
                 >
                     <Background 

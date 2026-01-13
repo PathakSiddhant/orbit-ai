@@ -299,3 +299,22 @@ export async function runWorkflow(flowId: number) {
 
   return { success: true, logs: executionLog };
 }
+
+// ==========================================================
+// 5. PUBLISH WORKFLOW (TOGGLE STATUS) 🚀
+// ==========================================================
+export const publishWorkflow = async (workflowId: number, isPublished: boolean) => {
+  const { userId } = await auth();
+  if (!userId) return { success: false, message: "Unauthorized" };
+
+  try {
+    await db.update(workflows)
+      .set({ status: isPublished ? "PUBLISHED" : "DRAFT" })
+      .where(eq(workflows.id, workflowId));
+      
+    revalidatePath(`/dashboard/workflows/${workflowId}`);
+    return { success: true, message: isPublished ? "Workflow Published" : "Workflow Paused" };
+  } catch (error) {
+    return { success: false, message: "Failed to update status" };
+  }
+};
