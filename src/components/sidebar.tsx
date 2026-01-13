@@ -9,11 +9,12 @@ import {
 } from "lucide-react";
 import { UserButton, useClerk } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
-import { ModeToggle } from "@/components/theme-toggle"; // Ensure theme-toggle.tsx exists
+import { ModeToggle } from "@/components/theme-toggle"; 
+import { getUserCredits } from "@/app/actions/billing"; // 👈 Import Action
+import { useEffect, useState } from "react"; // 👈 Import Hooks
 
-interface SidebarProps {
-    currentCredits: number;
-}
+// Interface updated (Prop no longer needed)
+interface SidebarProps {}
 
 const MENU_ITEMS = [
   { name: "Overview", icon: LayoutDashboard, href: "/dashboard" },
@@ -24,9 +25,25 @@ const MENU_ITEMS = [
   { name: "Settings", icon: Settings, href: "/dashboard/settings" },
 ];
 
-export const Sidebar = ({ currentCredits }: SidebarProps) => {
+export const Sidebar = ({}: SidebarProps) => {
   const pathname = usePathname();
   const { signOut } = useClerk();
+  
+  // 👇 NEW CODE: Credit Fetching Logic
+  const [credits, setCredits] = useState<number>(0); 
+
+  useEffect(() => {
+    const fetchCredits = async () => {
+       try {
+         const c = await getUserCredits();
+         // Ensure we handle cases where c might be null/undefined
+         setCredits(c || 0);
+       } catch (error) {
+         console.error("Error fetching credits:", error);
+       }
+    };
+    fetchCredits();
+  }, []);
 
   return (
     <div className="h-full w-full bg-card border-r border-border flex flex-col relative overflow-hidden transition-colors duration-300">
@@ -68,7 +85,7 @@ export const Sidebar = ({ currentCredits }: SidebarProps) => {
         })}
       </div>
 
-      {/* 3. CREDITS (Bottom) */}
+      {/* 3. CREDITS (Bottom) - Updated to use State */}
       <div className="p-4 z-10">
           <div className="bg-muted/30 border border-border p-4 rounded-xl relative overflow-hidden">
               <div className="flex items-center gap-3 mb-3 relative z-10">
@@ -77,11 +94,15 @@ export const Sidebar = ({ currentCredits }: SidebarProps) => {
                   </div>
                   <div>
                       <p className="text-[10px] text-muted-foreground font-medium uppercase">Credits</p>
-                      <p className="text-sm font-bold text-foreground">{currentCredits} / 10</p>
+                      <p className="text-sm font-bold text-foreground">{credits} / 10</p>
                   </div>
               </div>
               <div className="h-1.5 w-full bg-background rounded-full overflow-hidden relative z-10 border border-border/50">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${(currentCredits / 10) * 100}%` }} className="h-full bg-primary"></motion.div>
+                  <motion.div 
+                    initial={{ width: 0 }} 
+                    animate={{ width: `${(credits / 10) * 100}%` }} 
+                    className="h-full bg-primary"
+                  ></motion.div>
               </div>
           </div>
       </div>

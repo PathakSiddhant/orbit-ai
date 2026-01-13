@@ -1,116 +1,98 @@
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
-import { Check, Zap, CreditCard } from "lucide-react";
+import { getUserCredits } from "@/app/actions/billing";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Check, Coins, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default async function BillingPage() {
-  const { userId } = await auth();
-  const user = await db.query.users.findFirst({
-      where: eq(users.clerkId, userId!)
-  });
-
-  const credits = parseInt(user?.credits || "0");
+  // Server Side se Credits fetch karo
+  const credits = await getUserCredits();
+  
+  // Example: Maan lo Free plan limit 10 hai, aur Pro ki 1000
+  // Display ke liye logic (sirf UI purpose ke liye)
+  const plan = credits > 100 ? "Pro Plan" : "Free Plan";
+  const maxCredits = credits > 100 ? 10000 : 10; 
+  // Agar tere paas 1 Million hain, toh progress bar full dikhayenge bas
+  const usagePercent = Math.min(100, (credits / maxCredits) * 100);
 
   return (
-    <div className="flex flex-col p-8 h-full bg-black text-white overflow-y-auto">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-400 to-fuchsia-400 text-transparent bg-clip-text">
-            Billing & Plans
-        </h1>
-        <p className="text-zinc-400 mt-2">Manage your subscription and credit usage.</p>
-      </div>
+    <div className="flex flex-col gap-8 p-6">
+      <h1 className="text-3xl font-bold">Billing & Plans</h1>
 
-      {/* Credit Usage Card */}
-      <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/50 mb-10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-32 bg-violet-600/10 rounded-full blur-3xl -z-10"></div>
-          
-          <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                 <div className="h-10 w-10 rounded-lg bg-zinc-800 flex items-center justify-center text-violet-400">
-                    <Zap className="h-6 w-6" />
-                 </div>
-                 <div>
-                    <h3 className="font-semibold text-lg">Credit Balance</h3>
-                    <p className="text-sm text-zinc-400">Credits use hote hain jab workflow run hota hai.</p>
-                 </div>
+      {/* 1. CREDIT BALANCE CARD */}
+      <Card className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white border-none shadow-xl">
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                  <Coins className="text-yellow-400" /> Current Balance
+              </CardTitle>
+              <CardDescription className="text-zinc-400">
+                  Credits are consumed for every workflow execution.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <div className="text-4xl font-bold mb-4">
+                  {credits} <span className="text-lg font-normal text-zinc-400">Credits</span>
               </div>
-              <div className="text-right">
-                 <p className="text-3xl font-bold">{credits}</p>
-                 <p className="text-xs text-zinc-500">Available Credits</p>
+              <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                      <span>{plan} Active</span>
+                      <span>{credits > 1000 ? "Unlimited" : `${credits}/${maxCredits}`}</span>
+                  </div>
+                  {/* Progress bar ulat kaam karega (Credits bache hain) */}
+                  <Progress value={usagePercent} className="h-2 bg-zinc-700" color="yellow" />
               </div>
-          </div>
-          
-          {/* Progress Bar */}
-          <div className="w-full bg-zinc-800 rounded-full h-3 mb-2 overflow-hidden">
-             <div 
-                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 h-full transition-all duration-500" 
-                style={{ width: `${(credits / 100) * 100}%` }} // Example calc
-             ></div>
-          </div>
-          <p className="text-xs text-zinc-500 text-right">Free Tier Limit: 10 Credits</p>
-      </div>
+          </CardContent>
+      </Card>
 
-      {/* Pricing Plans */}
-      <div className="grid md:grid-cols-2 gap-8 max-w-5xl">
+      {/* 2. PRICING PLANS (Mock UI) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
           {/* FREE PLAN */}
-          <div className="p-8 rounded-2xl border border-zinc-800 bg-black hover:border-zinc-700 transition flex flex-col">
-              <h3 className="text-xl font-semibold text-zinc-300">Free Starter</h3>
-              <div className="my-4">
-                  <span className="text-4xl font-bold text-white">$0</span>
-                  <span className="text-zinc-500">/month</span>
-              </div>
-              <p className="text-zinc-400 text-sm mb-6">Perfect for testing and hobby projects.</p>
-              
-              <div className="space-y-3 flex-1">
-                  <FeatureItem text="10 Free Credits" />
-                  <FeatureItem text="Basic Workflow Builder" />
-                  <FeatureItem text="2 Active Workflows" />
-                  <FeatureItem text="Community Support" />
-              </div>
+          <Card className={`border-2 ${plan === "Free Plan" ? "border-primary" : "border-zinc-200 dark:border-zinc-800"}`}>
+              <CardHeader>
+                  <CardTitle>Free</CardTitle>
+                  <CardDescription>For hobbyists.</CardDescription>
+                  <div className="text-3xl font-bold mt-2">$0 <span className="text-sm font-normal text-muted-foreground">/mo</span></div>
+              </CardHeader>
+              <CardContent>
+                  <ul className="space-y-2 text-sm">
+                      <li className="flex gap-2"><Check size={16} className="text-green-500"/> 10 Credits / Month</li>
+                      <li className="flex gap-2"><Check size={16} className="text-green-500"/> Basic Actions</li>
+                      <li className="flex gap-2"><Check size={16} className="text-green-500"/> Community Support</li>
+                  </ul>
+              </CardContent>
+              <CardFooter>
+                  <Button variant="outline" className="w-full" disabled={plan === "Free Plan"}>
+                      {plan === "Free Plan" ? "Current Plan" : "Downgrade"}
+                  </Button>
+              </CardFooter>
+          </Card>
 
-              <Button disabled className="mt-8 w-full bg-zinc-800 text-zinc-400">Current Plan</Button>
-          </div>
-
-          {/* PRO PLAN (Glowing) */}
-          <div className="p-8 rounded-2xl border border-violet-500/30 bg-zinc-900/40 relative flex flex-col hover:border-violet-500/50 transition shadow-2xl shadow-violet-900/10">
-              <div className="absolute top-0 right-0 bg-violet-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-xl">
-                  POPULAR
-              </div>
-              <h3 className="text-xl font-semibold text-white">Pro Monthly</h3>
-              <div className="my-4">
-                  <span className="text-4xl font-bold text-white">$29</span>
-                  <span className="text-zinc-500">/month</span>
-              </div>
-              <p className="text-zinc-400 text-sm mb-6">For serious automators and businesses.</p>
-              
-              <div className="space-y-3 flex-1">
-                  <FeatureItem text="Unlimited Credits" checked />
-                  <FeatureItem text="Access to AI Agents (Gemini Pro)" checked />
-                  <FeatureItem text="Unlimited Active Workflows" checked />
-                  <FeatureItem text="Priority Support" checked />
-              </div>
-
-              <Button className="mt-8 w-full bg-white text-black hover:bg-zinc-200 font-bold">
-                 <CreditCard className="mr-2 h-4 w-4" /> Upgrade to Pro
-              </Button>
-          </div>
-
+          {/* PRO PLAN */}
+          <Card className={`border-2 relative overflow-hidden ${plan === "Pro Plan" ? "border-primary" : "border-zinc-200 dark:border-zinc-800"}`}>
+              {plan === "Pro Plan" && (
+                  <div className="absolute top-0 right-0 bg-primary text-white text-xs px-3 py-1 rounded-bl-lg">Active</div>
+              )}
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">Pro <Zap size={16} className="fill-yellow-400 text-yellow-400"/></CardTitle>
+                  <CardDescription>For power users.</CardDescription>
+                  <div className="text-3xl font-bold mt-2">$29 <span className="text-sm font-normal text-muted-foreground">/mo</span></div>
+              </CardHeader>
+              <CardContent>
+                  <ul className="space-y-2 text-sm">
+                      <li className="flex gap-2"><Check size={16} className="text-green-500"/> 10,000 Credits / Month</li>
+                      <li className="flex gap-2"><Check size={16} className="text-green-500"/> Unlimited Workflows</li>
+                      <li className="flex gap-2"><Check size={16} className="text-green-500"/> Priority Support</li>
+                  </ul>
+              </CardContent>
+              <CardFooter>
+                   {/* Button abhi dummy hai, Stripe baad mein lagayenge */}
+                  <Button className="w-full" disabled={plan === "Pro Plan"}>
+                      {plan === "Pro Plan" ? "Current Plan" : "Upgrade to Pro"}
+                  </Button>
+              </CardFooter>
+          </Card>
       </div>
     </div>
   );
-}
-
-// Helper Component for List Items
-function FeatureItem({ text, checked = false }: { text: string, checked?: boolean }) {
-    return (
-        <div className="flex items-center gap-3">
-            <div className={`h-5 w-5 rounded-full flex items-center justify-center ${checked ? 'bg-violet-600/20 text-violet-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                <Check className="h-3 w-3" />
-            </div>
-            <span className="text-sm text-zinc-300">{text}</span>
-        </div>
-    )
 }
