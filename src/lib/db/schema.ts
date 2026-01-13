@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { pgTable, serial, text, timestamp, boolean, jsonb, integer } from "drizzle-orm/pg-core";
 
-// --- USERS TABLE (Updated with Google Drive Tokens) ---
+// --- USERS TABLE (Updated with Google Drive & Notion) ---
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   clerkId: text("clerk_id").notNull().unique(), // Link to Clerk
@@ -11,9 +11,14 @@ export const users = pgTable("users", {
   tier: text("tier").default("Free"), // Free vs Pro users
   credits: text("credits").default("10"), // For AI usage limits
 
-  // 👇 NEW COLUMNS ADDED FOR GOOGLE DRIVE
+  // GOOGLE DRIVE TOKENS
   googleAccessToken: text("google_access_token"),
-  googleRefreshToken: text("google_refresh_token"), // Offline access ke liye zaroori hai
+  googleRefreshToken: text("google_refresh_token"), 
+
+  // 👇 NEW COLUMNS FOR NOTION
+  notionAccessToken: text("notion_access_token"),
+  notionWorkspaceId: text("notion_workspace_id"),
+  notionDbId: text("notion_db_id"), // User ka preferred database ID save karne ke liye
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
