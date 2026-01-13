@@ -1,36 +1,135 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🪐 Orbit - AI Automation SaaS
 
-## Getting Started
+> **Automate your work, relax your mind.**
+> Orbit is a visual workflow automation platform (like Zapier or Make) that connects your favorite apps (Google Drive, Notion, Slack) with the power of AI.
 
-First, run the development server:
+---
+
+## 📖 Table of Contents
+1. [What is Orbit?](#-what-is-orbit)
+2. [Key Features](#-key-features)
+3. [Project Structure (Map)](#-project-structure-where-is-what)
+4. [Tech Stack](#-tech-stack)
+5. [Environment Variables](#-environment-variables)
+
+---
+
+## 🌟 What is Orbit?
+Orbit allows users to create **"Workflows"**. A workflow is a chain of actions.
+* **Example:** Monitor Google Drive -> Summarize File (AI) -> Save to Notion -> Email Me.
+
+---
+
+## 🚀 Key Features
+
+### 🧠 The Brains
+* **Visual Editor:** Drag and drop nodes (`CustomNode.tsx`) to build automation.
+* **AI Agent (Gemini):** Summarizes and extracts data logic.
+
+### 🔗 The Integrations (Nodes)
+* **Google Drive:** Listen for new files.
+* **Notion:** Create pages automatically.
+* **Slack/Email:** Send notifications.
+
+### ⚙️ The Engine
+* **Cron Jobs:** Runs automatically via `/api/cron`.
+* **Logs & Connections:** Dedicated dashboards to monitor activity and manage OAuth.
+
+---
+
+## 📂 Project Structure (Where is what?)
+
+Based on the actual codebase structure:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+src/
+├── app/
+│   ├── actions/          # ⚡ Server Actions (Backend Logic)
+│   │   ├── workflows.ts  # The Core Engine (runWorkflow)
+│   │   ├── google.ts     # Drive Logic
+│   │   ├── gmail.ts      # Email Logic
+│   │   ├── notion.ts     # Notion Logic
+│   │   └── billing.ts    # Credits & Payments
+│   │
+│   ├── api/              # 🌐 Backend Routes
+│   │   ├── auth/         # OAuth Callbacks (Google/Notion)
+│   │   └── cron/         # Automation Trigger (route.ts)
+│   │
+│   ├── dashboard/        # 🖥️ The Main App UI
+│   │   ├── workflows/
+│   │   │   ├── _components/
+│   │   │   │   ├── CustomNode.tsx    # The Visual Node Card
+│   │   │   │   ├── editor.tsx        # The Canvas (React Flow)
+│   │   │   │   ├── SettingsPanel.tsx # Right Sidebar
+│   │   │   │   └── Tray.tsx          # Drag-drop Menu
+│   │   │   └── [workflowId]/         # Editor Page
+│   │   │
+│   │   ├── logs/         # Activity History Page
+│   │   ├── connections/  # Manage Integrations Page
+│   │   ├── billing/      # Credits Page
+│   │   └── settings/     # User Profile
+│   │
+│   ├── (auth)/           # Login/Signup Pages (Clerk)
+│   └── layout.tsx        # Main App Wrapper
+│
+├── components/
+│   └── ui/               # 🎨 Shadcn UI Components (Buttons, Cards, etc.)
+│
+├── lib/
+│   ├── db/               # 🗄️ Database
+│   │   ├── schema.ts     # Users, Workflows Tables
+│   │   └── index.ts      # DB Connection
+│   └── utils.ts          # Helper Functions
+│
+└── middleware.ts         # 🔒 Route Protection (Clerk)
+
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Tech Stack
+* **Framework:** Next.js 14 (App Router)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+* **Language:** TypeScript
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+* **Styling:** Tailwind CSS + Shadcn UI
 
-## Learn More
+* **Database:** PostgreSQL (Neon Tech)
 
-To learn more about Next.js, take a look at the following resources:
+* **ORM:** Drizzle ORM
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* **Auth:** Clerk
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+* **State Management:** Zustand (For the editor)
 
-## Deploy on Vercel
+* **Payment:** Stripe (Integrated in billing)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🔑 Environment Variables (.env.local)
+
+```bash
+
+# Database
+DATABASE_URL=...
+
+# Auth (Clerk)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
+
+# Google (Drive & Gmail)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=...
+
+# Notion
+NOTION_CLIENT_ID=...
+NOTION_CLIENT_SECRET=...
+
+# AI
+GEMINI_API_KEY=...
+
+```
+
+
+
+
+## 👨‍💻 Author
+Built with ❤️ by Siddharth Pathak.
