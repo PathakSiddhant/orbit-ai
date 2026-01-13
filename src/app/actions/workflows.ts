@@ -53,20 +53,30 @@ export async function deleteWorkflow(workflowId: number) {
 }
 
 // ==========================================================
-// 4. RUN WORKFLOW (THE REAL DEAL 🚀)
+// 4. RUN WORKFLOW (THE REAL DEAL 🚀) - Updated for Offline Runs
 // ==========================================================
-export async function runWorkflow(flowId: number) {
-  const { userId } = await auth();
+export async function runWorkflow(flowId: number, externalUserId?: string) {
+  
+  // 1. Determine User ID (Session vs Automation)
+  // Agar automation/cron se call hua hai toh 'externalUserId' use karo
+  let userId = externalUserId;
+
+  // Agar nahi, toh current logged-in user check karo
+  if (!userId) {
+      const session = await auth();
+      userId = session.userId || undefined;
+  }
+
   if (!userId) return { success: false, message: "Unauthorized" };
 
-  // 1. Fetch Workflow
+  // 2. Fetch Workflow
   const workflow = await db.query.workflows.findFirst({
     where: and(eq(workflows.id, flowId), eq(workflows.userId, userId))
   });
 
   if (!workflow) return { success: false, message: "Workflow not found" };
 
-  // 2. Fetch User Tokens (Crucial for Drive/Notion)
+  // 3. Fetch User Tokens (Crucial for Drive/Notion)
   const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
 
   const nodes = JSON.parse(workflow.nodes || "[]");
@@ -75,7 +85,7 @@ export async function runWorkflow(flowId: number) {
   const executionLog: string[] = [];
   let currentData: any = {}; 
 
-  executionLog.push(`🚀 Execution Started (Real-Mode)`); 
+  executionLog.push(`🚀 Execution Started (Mode: ${externalUserId ? 'Automated' : 'Manual'})`); 
 
   // --- FIND STARTING POINT ---
   const trigger = nodes.find((n: any) => n.type === 'trigger');
@@ -289,7 +299,7 @@ export async function runWorkflow(flowId: number) {
     await db.insert(workflowExecutions).values({
       workflowId: flowId,
       userId: userId,
-      trigger: "Manual Run",
+      trigger: externalUserId ? "Automation" : "Manual Run",
       status: "Success",
       details: JSON.stringify(executionLog),
     });
