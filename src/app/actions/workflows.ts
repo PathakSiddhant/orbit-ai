@@ -8,8 +8,9 @@ import { and, eq } from "drizzle-orm";
 import { GoogleGenerativeAI } from "@google/generative-ai"; 
 import * as cheerio from 'cheerio'; 
 import { Client } from "@notionhq/client"; 
-import { google } from "googleapis"; // 👈 Import Google
-import { oauth2Client } from "@/lib/google"; // 👈 Import OAuth Helper
+import { google } from "googleapis"; 
+import { oauth2Client } from "@/lib/google"; 
+import { sendGmail, debugToken } from "@/app/actions/gmail"; // 👈 Updated Import with Debugger
 
 // 1. Create Workflow
 export async function createWorkflow(name: string, description: string) {
@@ -53,15 +54,13 @@ export async function deleteWorkflow(workflowId: number) {
 }
 
 // ==========================================================
-// 4. RUN WORKFLOW (THE REAL DEAL 🚀) - Updated for Offline Runs
+// 4. RUN WORKFLOW (THE REAL DEAL 🚀) - With Credit System
 // ==========================================================
 export async function runWorkflow(flowId: number, externalUserId?: string) {
   
   // 1. Determine User ID (Session vs Automation)
-  // Agar automation/cron se call hua hai toh 'externalUserId' use karo
   let userId = externalUserId;
 
-  // Agar nahi, toh current logged-in user check karo
   if (!userId) {
       const session = await auth();
       userId = session.userId || undefined;
@@ -69,15 +68,22 @@ export async function runWorkflow(flowId: number, externalUserId?: string) {
 
   if (!userId) return { success: false, message: "Unauthorized" };
 
-  // 2. Fetch Workflow
+  // 2. Fetch User & Check Credits 💳
+  const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
+  if (!user) return { success: false, message: "User not found" };
+
+  // 👇 Credit Check Logic
+  const currentCredits = parseInt(user.credits || "0");
+  if (currentCredits <= 0) {
+      return { success: false, message: "❌ Insufficient Credits. Please upgrade." };
+  }
+
+  // 3. Fetch Workflow
   const workflow = await db.query.workflows.findFirst({
     where: and(eq(workflows.id, flowId), eq(workflows.userId, userId))
   });
 
   if (!workflow) return { success: false, message: "Workflow not found" };
-
-  // 3. Fetch User Tokens (Crucial for Drive/Notion)
-  const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
 
   const nodes = JSON.parse(workflow.nodes || "[]");
   const edges = JSON.parse(workflow.edges || "[]");
@@ -192,7 +198,7 @@ export async function runWorkflow(flowId: number, externalUserId?: string) {
           
           try {
               const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-              const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" }); // Use efficient model
+              const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" }); 
 
               const finalPrompt = `
               CONTEXT DATA (Source: Website or File):
@@ -232,7 +238,6 @@ export async function runWorkflow(flowId: number, externalUserId?: string) {
                   await notion.pages.create({
                       parent: { database_id: dbId },
                       properties: {
-                          // 'Name' is the default title property. Change if your DB uses a different name.
                           Name: { 
                               title: [
                                   { text: { content: "Orbit Workflow Result" } }
@@ -258,15 +263,40 @@ export async function runWorkflow(flowId: number, externalUserId?: string) {
       }
 
       // ------------------------------------------
-      // 5. OUTPUT NODES (Slack/Email) 📨
+      // 5. EMAIL (VIA GMAIL API) 📧
       // ------------------------------------------
-      else if (['slack', 'email', 'send-email'].includes(currentNode.type || '')) {
+      else if (currentNode.type === 'email') {
+          executionLog.push(`📧 Email: preparing to send via Gmail...`);
+          
+          // 👇 DEBUG CALL
+          await debugToken(userId); 
+
+          const recipient = currentNode.data.email;
+          const subject = "Orbit AI Report";
+          const body = currentData.aiResult || currentData.context || "No content generated.";
+
+          if (!recipient) {
+              executionLog.push(`❌ Email Error: No recipient email provided.`);
+          } else {
+              // Call our new Gmail Action
+              const result = await sendGmail(userId, recipient, subject, `<p>${body}</p>`);
+              
+              if (result.success) {
+                  executionLog.push(`✅ Email Sent Successfully! (ID: ${result.messageId})`);
+              } else {
+                  executionLog.push(`❌ Email Failed: ${result.message}`);
+              }
+          }
+      }
+
+      // ------------------------------------------
+      // 6. SLACK (WEBHOOK) 💬
+      // ------------------------------------------
+      else if (currentNode.type === 'slack') {
           const message = currentData.aiResult || currentData.context || "Hello from Orbit Workflow!";
-          const dest = currentNode.data.emailTo || "Slack Channel";
+          executionLog.push(`💬 Slack: Sending message...`);
           
-          executionLog.push(`📨 Sending Output to ${dest}...`);
-          
-          if (currentNode.type === 'slack' && currentNode.data.slackWebhook) {
+          if (currentNode.data.slackWebhook) {
              try {
                  await fetch(currentNode.data.slackWebhook, {
                      method: 'POST',
@@ -278,9 +308,7 @@ export async function runWorkflow(flowId: number, externalUserId?: string) {
                  executionLog.push(`❌ Slack Failed.`);
              }
           } else {
-             // Email Simulation
-             await new Promise(r => setTimeout(r, 800));
-             executionLog.push(`✅ Email Sent Successfully.`);
+             executionLog.push(`❌ Slack Error: No Webhook URL.`);
           }
       }
 
@@ -303,6 +331,12 @@ export async function runWorkflow(flowId: number, externalUserId?: string) {
       status: "Success",
       details: JSON.stringify(executionLog),
     });
+
+    // 💰 DEDUCT CREDITS (After successful execution)
+    await db.update(users)
+        .set({ credits: (currentCredits - 1).toString() })
+        .where(eq(users.clerkId, userId));
+        
   } catch (err) {
     console.error("Failed to save execution:", err);
   }

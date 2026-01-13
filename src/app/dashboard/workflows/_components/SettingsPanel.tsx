@@ -323,9 +323,9 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
           )}
 
           {/* =======================
-              SLACK / EMAIL
+              SLACK / LEGACY EMAIL
              ======================= */}
-          {(currentNode.data.type === "slack" || currentNode.data.type === "send-email" || currentNode.data.type === "email") && (
+          {(currentNode.data.type === "slack" || currentNode.data.type === "send-email") && (
              <div className="space-y-4">
                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-lg flex items-start gap-3">
                      <Lock className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
@@ -372,6 +372,35 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
           )}
 
           {/* =======================
+              EMAIL SETTINGS (NEW)
+             ======================= */}
+          {currentNode.data.type === "email" && (
+             <div className="space-y-4">
+                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-3">
+                     <div className="bg-blue-100 dark:bg-blue-800 p-2 rounded-full">
+                         <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                     </div>
+                     <div>
+                         <p className="font-bold text-sm text-blue-900 dark:text-blue-100">Send Email (Gmail API)</p>
+                         <p className="text-xs text-blue-700 dark:text-blue-300">Sends email from YOUR connected Gmail account.</p>
+                     </div>
+                 </div>
+
+                 <div>
+                     <Label className="mb-2 block">Recipient Email</Label>
+                     <Input 
+                        placeholder="client@example.com"
+                        value={currentNode.data.email || ""}
+                        onChange={(e) => handleChange(e, 'email')}
+                     />
+                     <p className="text-[10px] text-zinc-500 mt-2">
+                        Who should receive this email?
+                     </p>
+                 </div>
+             </div>
+          )}
+
+          {/* =======================
               WEB SCRAPER
              ======================= */}
           {(currentNode.data.type === "web-scraper" || currentNode.data.type === "browser") && (
@@ -396,7 +425,7 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
           )}
           
           {/* =======================
-              NOTION SETTINGS (👇 UPDATED WITH MANUAL INPUT)
+              NOTION SETTINGS
              ======================= */}
            {currentNode.data.type === "notion" && (
              <div className="space-y-4">
@@ -440,14 +469,12 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                                 >
                                     <option value="">Select an item...</option>
                                     {notionDbs.map((db: any) => {
-                                        // Handle Title safely (Pages use 'properties', Databases use 'title')
                                         const title = db.title?.[0]?.plain_text 
                                             || db.properties?.title?.title?.[0]?.plain_text 
                                             || "Untitled";
-                                        
+                                    
                                         return (
                                             <option key={db.id} value={db.id}>
-                                                {/* 👇 Show Type clearly */}
                                                 [{db.object.toUpperCase()}] {title}
                                             </option>
                                         )
@@ -456,7 +483,6 @@ export default function SettingsPanel({ selectedNode, setNodes, onClose }: Setti
                             )}
                         </div>
 
-                        {/* 👇 NEW: MANUAL ID OVERRIDE (THE FIX) */}
                         <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
                             <Label className="mb-2 block text-xs uppercase text-zinc-500">Or Paste Database ID Manually</Label>
                             <Input 
