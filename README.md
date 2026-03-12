@@ -132,4 +132,4 @@ GEMINI_API_KEY=...
 
 
 ## 👨‍💻 Author
-Built with ❤️ by Siddharth Pathak.
+Built with ❤️ by Siddhant Pathak.
